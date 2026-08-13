@@ -1,0 +1,362 @@
+{
+  "name": "JARVIS",
+  "nodes": [
+    {
+      "parameters": {
+        "name": "emailAgent",
+        "description": "Call this tool for any email actions.",
+        "workflowId": {
+          "__rl": true,
+          "value": "bzRf138qpDd6ogEQ",
+          "mode": "list",
+          "cachedResultName": "Email Agent Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2,
+      "position": [
+        48,
+        800
+      ],
+      "id": "6d8dec3e-8f84-40a5-9da6-99978544f73a",
+      "name": "Email Agent"
+    },
+    {
+      "parameters": {
+        "name": "contactAgent",
+        "description": "Call this tool for any contact related actions.",
+        "workflowId": {
+          "__rl": true,
+          "value": "rCTAROjXjH4QZ9kq",
+          "mode": "list",
+          "cachedResultName": "Contacts Agent Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2,
+      "position": [
+        320,
+        800
+      ],
+      "id": "d2b632c1-1112-49b5-a468-0dcca6001b4b",
+      "name": "Contact Agent"
+    },
+    {
+      "parameters": {
+        "name": "contentCreator",
+        "description": "Call this tool to create blog posts.",
+        "workflowId": {
+          "__rl": true,
+          "value": "h6tcoBebkjDKUssg",
+          "mode": "list",
+          "cachedResultName": "Content Creator Agent Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2,
+      "position": [
+        464,
+        800
+      ],
+      "id": "b1c7e8e9-ae09-4fba-911e-c26e66f4efbb",
+      "name": "Content Creator Agent"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use this tool to search the internet",
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n    \"api_key\": \"{{TAVILY_API_KEY}}\",\n    \"query\": \"{searchTerm}\",\n    \"search_depth\": \"basic\",\n    \"include_answer\": true,\n    \"topic\": \"news\",\n    \"include_raw_content\": true,\n    \"max_results\": 3\n} ",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "searchTerm",
+              "description": "What the user has requested to search the internet for",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        512,
+        528
+      ],
+      "id": "670ae1eb-2f45-4ef0-a38c-8aae4478c410",
+      "name": "Tavily"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolCalculator",
+      "typeVersion": 1,
+      "position": [
+        640,
+        528
+      ],
+      "id": "4c373c52-7ea0-4449-ae90-341b9beb646f",
+      "name": "Calculator"
+    },
+    {
+      "parameters": {
+        "name": "calendarAgent",
+        "description": "Call this tool for any calendar action.",
+        "workflowId": {
+          "__rl": true,
+          "value": "2GVHowsDaRpvCDXo",
+          "mode": "list",
+          "cachedResultName": "Calendar Agent Tool"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2,
+      "position": [
+        176,
+        800
+      ],
+      "id": "7525e8d2-d2c6-46d8-bfa6-147c9db268bd",
+      "name": "Calendar Agent"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "n8n-connection",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        304
+      ],
+      "id": "41167ec3-3ff3-4dc6-b8df-4feb023f2335",
+      "name": "Webhook",
+      "webhookId": "{{N8N_WEBHOOK_ID}}"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        528,
+        304
+      ],
+      "id": "bfd999a0-1edd-4b4f-946b-0d990430ee10",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Webhook').item.json.headers.host }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        32,
+        544
+      ],
+      "id": "e4733ddd-d166-47bf-b23e-754b0599f048",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-5",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        528
+      ],
+      "id": "1c244296-be71-4f3c-91c3-41c8b3e329e3",
+      "name": "GPT-5",
+      "credentials": {
+        "openRouterApi": {
+          "id": "{{OPENROUTER_CREDENTIAL_ID}}",
+          "name": "{{OPENROUTER_CREDENTIAL_NAME}}"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.query }}",
+        "options": {
+          "systemMessage": "=# Overview\nVocê é um assistente pessoal. Seu trabalho é enviar a solicitação do usuário para a ferramenta correta. Você nunca deve escrever e-mails ou criar resumos, apenas precisa chamar a ferramenta correta.\n\n## Tools\n- emailAgent: Use esta ferramenta para executar ações no e-mail  \n- calendarAgent: Use esta ferramenta para executar ações no calendário  \n- contactAgent: Use esta ferramenta para obter, atualizar ou adicionar contatos  \n- contentCreator: Use esta ferramenta para criar posts de blog  \n- Tavily: Use esta ferramenta para pesquisar na web  \n\n## Rules\n- Algumas ações exigem que você busque informações de contato primeiro. Para as ações a seguir, você deve obter as informações de contato e enviá-las para o agente que precisa delas:\n  - enviar e-mails  \n  - redigir e-mails  \n  - criar evento de calendário com participantes  \n\n## Examples\n1)  \n- Input: enviar um e-mail para o Filipe perguntando que horas ele quer fazer a reunião  \n- Action: Use contactAgent para obter o e-mail do Filipe\n- Action: Use emailAgent para enviar o e-mail. Você passará para a ferramenta uma consulta como \"envie um e-mail para o Filipe perguntando que horas ele quer sair. Aqui está o e-mail dele: [endereço de e-mail]\"  \n- Output: O e-mail foi enviado para o Filipe. Posso ajudar em mais alguma coisa?\n\n## Final Reminders\nAqui está a data/hora atual: {{ $now }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        128,
+        304
+      ],
+      "id": "02be5b64-1b09-451f-b781-885962350263",
+      "name": "JARVIS"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Email Agent": {
+      "ai_tool": [
+        [
+          {
+            "node": "JARVIS",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contact Agent": {
+      "ai_tool": [
+        [
+          {
+            "node": "JARVIS",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Creator Agent": {
+      "ai_tool": [
+        [
+          {
+            "node": "JARVIS",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily": {
+      "ai_tool": [
+        [
+          {
+            "node": "JARVIS",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculator": {
+      "ai_tool": [
+        [
+          {
+            "node": "JARVIS",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calendar Agent": {
+      "ai_tool": [
+        [
+          {
+            "node": "JARVIS",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "JARVIS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "JARVIS",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT-5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "JARVIS",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JARVIS": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Vancouver",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "037d958c-e85e-45a8-9abf-9f485f16c61d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "51dfedb15e8c71df6fd6d2e80230df8eebe08d8d3c2c89632b25a00512fe64a5"
+  },
+  "id": "tZw0WzNBWBUQ5BAn",
+  "tags": []
+}

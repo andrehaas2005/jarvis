@@ -1,0 +1,193 @@
+{
+  "name": "Content Creator Agent Tool",
+  "nodes": [
+    {
+      "parameters": {
+        "toolDescription": "Use this tool to search the internet",
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n    \"api_key\": \"{{TAVILY_API_KEY}}\",\n    \"query\": \"{searchTerm}\",\n    \"search_depth\": \"basic\",\n    \"include_answer\": true,\n    \"topic\": \"news\",\n    \"include_raw_content\": true,\n    \"max_results\": 3\n} ",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "searchTerm",
+              "description": "What the user has requested to write a blog about",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        -320,
+        368
+      ],
+      "id": "fc326eea-57a7-43e4-9d14-eae683b1e77e",
+      "name": "Tavily"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.query}}",
+        "options": {
+          "systemMessage": "=# Overview\nVocê é um escritor de blog de IA especializado em criar conteúdo envolvente, bem estruturado e informativo.  \nSeu estilo de escrita é claro, convincente e adaptado ao público-alvo.  \nVocê otimiza para legibilidade, SEO e valor, garantindo que os blogs sejam bem pesquisados, originais e livres de conteúdo supérfluo.\n\n## Tools\nTavily – Use esta ferramenta para pesquisar na web sobre o tópico solicitado para o post do blog.\n\n## Blog Requirements\nFormate todo o conteúdo do blog em HTML, usando títulos apropriados (<h1>, <h2>), parágrafos (<p>), listas (<ul><li>) e links (<a href=\"URL\">) para citações.  \nTodas as citações da ferramenta Tavily devem ser preservadas, com hyperlinks clicáveis para que os leitores possam acessar as fontes originais.\n\nMantenha um tom natural, semelhante ao humano, use estruturas de frases variadas e inclua exemplos ou dados relevantes quando necessário.  \nEstruture o conteúdo para leitura fácil, com parágrafos concisos e fluxo lógico.  \nSempre garanta precisão factual e alinhe o tom com a marca ou propósito pretendido."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        -448,
+        80
+      ],
+      "id": "b5efb83c-9e50-4297-ac54-fd6b93af731d",
+      "name": "Content Creator Agent",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [
+        -608,
+        320
+      ],
+      "id": "474e6293-a373-450f-b49f-d9db0ef15283",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "{{ANTHROPIC_CREDENTIAL_ID}}",
+          "name": "{{ANTHROPIC_CREDENTIAL_NAME}}"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "14d9076e-27ea-4846-8b44-f83cf4022b9e",
+              "name": "response",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a3f39376-5dd0-4646-8d8c-593910489141",
+      "name": "Response"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f2a8ff2d-6b59-4ad6-a2e7-8705354f4105",
+              "name": "response",
+              "value": "Erro ao processar a solicitação. Por favor, tente novamente..",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        192
+      ],
+      "id": "3ac16bed-4752-489b-8b01-157179106124",
+      "name": "Try Again"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -704,
+        80
+      ],
+      "id": "6cee4b72-7a0a-4946-bce0-249851f61664",
+      "name": "When Executed by Another Workflow"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Tavily": {
+      "ai_tool": [
+        [
+          {
+            "node": "Content Creator Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Content Creator Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Creator Agent": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Try Again",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Content Creator Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e5eaf64e-1218-4e06-ae73-e15fcf1da9b2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "51dfedb15e8c71df6fd6d2e80230df8eebe08d8d3c2c89632b25a00512fe64a5"
+  },
+  "id": "h6tcoBebkjDKUssg",
+  "tags": []
+}

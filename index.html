@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS - Sistema de Inteligência Artificial</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="hud-container">
+        <!-- Grid Pattern Background -->
+        <div class="grid-background"></div>
+        
+        <!-- Top Left - Earth Status -->
+        <div class="hud-panel top-left">
+            <div class="earth-hologram">
+                <img src="earthhologram.gif" alt="Earth Hologram" class="earth-gif">
+            </div>
+            <div class="status-display">
+                <div class="status-line">
+                    <span class="label">EARTH</span>
+                    <span class="value">N33</span>
+                </div>
+                <div class="status-line">
+                    <span class="label">NWO</span>
+                    <span class="value active">ACTIVATED</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Left Side - Loading Systems -->
+        <div class="hud-panel left-side">
+            <div class="loading-systems">
+                <div class="loading-item">
+                    <span class="loading-text">66UL-054 LOADING...</span>
+                    <div class="loading-bar">
+                        <div class="loading-progress" style="width: 75%"></div>
+                    </div>
+                </div>
+                <div class="loading-item">
+                    <span class="loading-text">YUGOT/289 LOADING...</span>
+                    <div class="loading-bar">
+                        <div class="loading-progress" style="width: 60%"></div>
+                    </div>
+                </div>
+                <div class="loading-item">
+                    <span class="loading-text">FALKA?943 LOADING...</span>
+                    <div class="loading-bar">
+                        <div class="loading-progress" style="width: 90%"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="data-chart">
+                <div class="chart-bars">
+                    <div class="bar" style="height: 75%"></div>
+                    <div class="bar" style="height: 65%"></div>
+                    <div class="bar" style="height: 50%"></div>
+                    <div class="bar" style="height: 65%"></div>
+                </div>
+                <div class="chart-labels">
+                    <span>75</span>
+                    <span>65</span>
+                    <span>50</span>
+                    <span>65</span>
+                </div>
+            </div>
+            
+            <div class="camera-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 15C13.66 15 15 13.66 15 12C15 10.34 13.66 9 12 9C10.34 9 9 10.34 9 12C9 13.66 10.34 15 12 15Z" fill="currentColor"/>
+                    <path d="M20 4H16.83L15 2H9L7.17 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V6C22 4.9 21.1 4 20 4ZM12 17C9.24 17 7 14.76 7 12C7 9.24 9.24 7 12 7C14.76 7 17 9.24 17 12C17 14.76 14.76 17 12 17Z" fill="currentColor"/>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Center - Main HUD -->
+        <div class="hud-panel center">
+            <div class="hologram-container">
+                <img src="hologram.gif" alt="Holographic Figure" class="hologram-gif">
+                <div class="jarvis-label">
+                    <h1>JARVIS</h1>
+                    <div class="label-line"></div>
+                </div>
+            </div>
+            
+            <div class="voice-controls">
+                <button class="voice-button" id="voiceButton">
+                    <div class="mic-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 1C10.34 1 9 2.34 9 4V12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12V4C15 2.34 13.66 1 12 1Z" fill="currentColor"/>
+                            <path d="M19 10V12C19 15.87 15.87 19 12 19C8.13 19 5 15.87 5 12V10H7V12C7 14.76 9.24 17 12 17C14.76 17 17 14.76 17 12V10H19Z" fill="currentColor"/>
+                            <path d="M11 22H13V24H11V22Z" fill="currentColor"/>
+                            <path d="M7 22H9V24H7V22Z" fill="currentColor"/>
+                            <path d="M15 22H17V24H15V22Z" fill="currentColor"/>
+                        </svg>
+                    </div>
+                </button>
+                <div class="voice-status" id="voiceStatus">
+                    <div class="status-text">SISTEMA ATIVO</div>
+                </div>
+            </div>
+            
+            <div class="chat-messages" id="chatMessages">
+                <div class="message jarvis-message">
+                    <div class="message-content">
+                        <p>JARVIS ONLINE. TODOS OS SISTEMAS CARREGADOS E PRONTOS PARA USO.</p>
+                        <span class="message-time">SISTEMA INICIADO</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Right - Radar Display -->
+        <div class="hud-panel top-right">
+            <div class="radar-hologram">
+                <img src="radar.gif" alt="Radar Display" class="radar-gif">
+            </div>
+            <div class="radar-status">
+                <div class="status-text">TRACKING SYSTEM STATUS <span class="online">ONLINE</span></div>
+            </div>
+        </div>
+
+        <!-- Right Side - Data Log -->
+        <div class="hud-panel right-side">
+            <div class="data-log">
+                <div class="log-content">
+                    <div class="log-line">[SYSTEM] JARVIS INITIALIZED</div>
+                    <div class="log-line">[AUDIO] VOICE RECOGNITION ACTIVE</div>
+                    <div class="log-line">[NETWORK] ELEVENLABS CONNECTED</div>
+                    <div class="log-line">[STATUS] ALL SYSTEMS OPERATIONAL</div>
+                    <div class="log-line">[READY] AWAITING USER INPUT</div>
+                </div>
+            </div>
+            
+            <div class="data-displays">
+                <div class="display-circle">
+                    <div class="circle-label">DY</div>
+                </div>
+                <div class="display-circle">
+                    <div class="circle-label">53</div>
+                </div>
+                <div class="display-circle">
+                    <div class="circle-label">PH</div>
+                </div>
+                <div class="display-circle">
+                    <div class="circle-label">KL</div>
+                </div>
+            </div>
+            
+            <div class="wave-displays">
+                <div class="wave-container">
+                    <div class="wave wave-1"></div>
+                    <div class="wave wave-2"></div>
+                    <div class="wave wave-3"></div>
+                </div>
+                <div class="wave-container">
+                    <div class="wave wave-1"></div>
+                    <div class="wave wave-2"></div>
+                    <div class="wave wave-3"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Voice Indicator -->
+        <div class="voice-indicator" id="voiceIndicator">
+            <div class="voice-wave"></div>
+            <span>ESCUTANDO...</span>
+        </div>
+    </div>
+
+    <!-- ElevenLabs ConvAI Widget -->
+<!--    <elevenlabs-convai agent-id="agent_4201k3fgz4g9esvbdy9vpnhe5ebz"></elevenlabs-convai>-->
+<!--    <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>-->
+<elevenlabs-convai agent-id="agent_7001ktkn543wf7t9s7fv643vjm7z"></elevenlabs-convai><script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
+    
+    <script src="script.js"></script>
+</body>
+</html>
