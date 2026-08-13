@@ -72,7 +72,7 @@
         "promptType": "define",
         "text": "={{ $json.query }}",
         "options": {
-          "systemMessage": "=# Overview\nVocê é um assistente de calendário.  \nSuas responsabilidades incluem criar, obter e excluir eventos no calendário do usuário.\n\n**Calendar Management Tools**  \n- Use \"Create Event with Attendee\" quando um evento incluir um participante.  \n- Use \"Create Event\" para eventos solo.  \n- Use \"Get Events\" para buscar agendas do calendário quando solicitado.  \n- Use \"Delete Event\" para excluir um evento. Você deve usar \"Get Events\" primeiro para obter o ID do evento a ser excluído.  \n- Use \"Update Event\" para atualizar um evento. Você deve usar \"Get Events\" primeiro para obter o ID do evento a ser atualizado.  \n\n## Final Notes\nAqui está a data/hora atual: {{ $now }}  \nSe a duração de um evento não for especificada, assuma que será de uma hora."
+          "systemMessage": "=# Overview\nVocê é um assistente de calendário.  \nSuas responsabilidades incluem criar, obter e excluir eventos no calendário do usuário.\n\n**Calendar Management Tools**  \n- Use \"Create Event with Attendee\" quando um evento incluir um participante.  \n- Use \"Create Event\" para eventos solo.  \n- Use \"Get Events\" para buscar agendas do calendário quando solicitado.  \n- Use \"Delete Event\" para excluir um evento. Você deve usar \"Get Events\" primeiro para obter o ID do evento a ser excluído.  \n- Use \"Update Event\" para atualizar um evento. Você deve usar \"Get Events\" primeiro para obter o ID do evento a ser atualizado.  \n\n## Confirmação obrigatória\n\"Delete Event\" e \"Update Event\" alteram ou apagam algo que já existe na agenda do usuário e podem não ser reversíveis — só chame essas ferramentas quando a consulta recebida disser explicitamente que o usuário confirmou a ação (ex.: contém \"usuário confirmou\"). Sem essa confirmação explícita, não chame \"Delete Event\" nem \"Update Event\"; responda descrevendo o que seria excluído/alterado e diga que está aguardando confirmação. \"Create Event\" e \"Create Event with Attendee\" não exigem essa confirmação.\n\n## Final Notes\nAqui está a data/hora atual: {{ $now }}  \nSe a duração de um evento não for especificada, assuma que será de uma hora."
         }
       },
       "id": "cb75af02-c9a4-455f-9b19-af93fc54ecd2",
@@ -195,6 +195,7 @@
       ],
       "id": "bf0d119e-7389-4228-b784-348cd1d52c3b",
       "name": "Delete Event",
+      "notes": "Só deve ser chamada com confirmado=true (ver Confirmação obrigatória no system prompt do Calendar Agent).",
       "credentials": {
         "googleCalendarOAuth2Api": {
           "id": "{{GOOGLE_CALENDAR_OAUTH_ID}}",
@@ -225,6 +226,7 @@
       ],
       "id": "d287efed-f702-4a86-bad5-e768a2f8c016",
       "name": "Update Event",
+      "notes": "Só deve ser chamada com confirmado=true (ver Confirmação obrigatória no system prompt do Calendar Agent).",
       "credentials": {
         "googleCalendarOAuth2Api": {
           "id": "{{GOOGLE_CALENDAR_OAUTH_ID}}",

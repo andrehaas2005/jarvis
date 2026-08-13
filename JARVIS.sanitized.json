@@ -90,9 +90,11 @@
         "toolDescription": "Use this tool to search the internet",
         "method": "POST",
         "url": "https://api.tavily.com/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{\n    \"api_key\": \"{{TAVILY_API_KEY}}\",\n    \"query\": \"{searchTerm}\",\n    \"search_depth\": \"basic\",\n    \"include_answer\": true,\n    \"topic\": \"news\",\n    \"include_raw_content\": true,\n    \"max_results\": 3\n} ",
+        "jsonBody": "{\n    \"query\": \"{searchTerm}\",\n    \"search_depth\": \"basic\",\n    \"include_answer\": true,\n    \"topic\": \"news\",\n    \"include_raw_content\": true,\n    \"max_results\": 3\n} ",
         "placeholderDefinitions": {
           "values": [
             {
@@ -110,7 +112,13 @@
         528
       ],
       "id": "670ae1eb-2f45-4ef0-a38c-8aae4478c410",
-      "name": "Tavily"
+      "name": "Tavily",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "{{TAVILY_CREDENTIAL_ID}}",
+          "name": "{{TAVILY_CREDENTIAL_NAME}}"
+        }
+      }
     },
     {
       "parameters": {},
@@ -170,6 +178,55 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "0a2f5e2c-1b6d-4d3a-9f0e-6c1a2b8e7d40",
+              "leftValue": "={{ $json.headers['x-jarvis-secret'] }}",
+              "rightValue": "={{ $env.JARVIS_WEBHOOK_SECRET }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        16,
+        304
+      ],
+      "id": "3c9d7e4a-8f21-4a6b-9d5c-2e7f8a1b4c60",
+      "name": "Verificar Segredo do Webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"error\": \"unauthorized\" } }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        16,
+        448
+      ],
+      "id": "7e5b6c3d-4f9a-4b2e-8c1d-9a0f3e6b7d80",
+      "name": "Não Autorizado"
+    },
+    {
+      "parameters": {
         "options": {}
       },
       "type": "n8n-nodes-base.respondToWebhook",
@@ -184,7 +241,7 @@
     {
       "parameters": {
         "sessionIdType": "customKey",
-        "sessionKey": "={{ $('Webhook').item.json.headers.host }}"
+        "sessionKey": "={{ $('Webhook').item.json.body.conversation_id || $('Webhook').item.json.headers['x-conversation-id'] || $('Webhook').item.json.headers.host }}"
       },
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
@@ -220,7 +277,7 @@
         "promptType": "define",
         "text": "={{ $json.body.query }}",
         "options": {
-          "systemMessage": "=# Overview\nVocê é um assistente pessoal. Seu trabalho é enviar a solicitação do usuário para a ferramenta correta. Você nunca deve escrever e-mails ou criar resumos, apenas precisa chamar a ferramenta correta.\n\n## Tools\n- emailAgent: Use esta ferramenta para executar ações no e-mail  \n- calendarAgent: Use esta ferramenta para executar ações no calendário  \n- contactAgent: Use esta ferramenta para obter, atualizar ou adicionar contatos  \n- contentCreator: Use esta ferramenta para criar posts de blog  \n- Tavily: Use esta ferramenta para pesquisar na web  \n\n## Rules\n- Algumas ações exigem que você busque informações de contato primeiro. Para as ações a seguir, você deve obter as informações de contato e enviá-las para o agente que precisa delas:\n  - enviar e-mails  \n  - redigir e-mails  \n  - criar evento de calendário com participantes  \n\n## Examples\n1)  \n- Input: enviar um e-mail para o Filipe perguntando que horas ele quer fazer a reunião  \n- Action: Use contactAgent para obter o e-mail do Filipe\n- Action: Use emailAgent para enviar o e-mail. Você passará para a ferramenta uma consulta como \"envie um e-mail para o Filipe perguntando que horas ele quer sair. Aqui está o e-mail dele: [endereço de e-mail]\"  \n- Output: O e-mail foi enviado para o Filipe. Posso ajudar em mais alguma coisa?\n\n## Final Reminders\nAqui está a data/hora atual: {{ $now }}"
+          "systemMessage": "=# Overview\nVocê é um assistente pessoal. Seu trabalho é enviar a solicitação do usuário para a ferramenta correta. Você nunca deve escrever e-mails ou criar resumos, apenas precisa chamar a ferramenta correta.\n\n## Tools\n- emailAgent: Use esta ferramenta para executar ações no e-mail  \n- calendarAgent: Use esta ferramenta para executar ações no calendário  \n- contactAgent: Use esta ferramenta para obter, atualizar ou adicionar contatos  \n- contentCreator: Use esta ferramenta para criar posts de blog  \n- Tavily: Use esta ferramenta para pesquisar na web  \n\n## Rules\n- Algumas ações exigem que você busque informações de contato primeiro. Para as ações a seguir, você deve obter as informações de contato e enviá-las para o agente que precisa delas:\n  - enviar e-mails  \n  - redigir e-mails  \n  - criar evento de calendário com participantes  \n- Ações destrutivas ou irreversíveis (excluir evento de calendário, enviar e-mail, responder e-mail) exigem confirmação explícita do usuário nesta mesma conversa antes de você chamar a ferramenta:\n  1. Descreva a ação para o usuário em detalhes (o que será excluído/enviado, para quem, quando) e pergunte se ele confirma.\n  2. Só chame emailAgent/calendarAgent para executar a ação depois que o usuário responder afirmativamente. Nunca presuma confirmação implícita.\n  3. Ao chamar a ferramenta para a ação confirmada, inclua na consulta a frase \"usuário confirmou\" junto com a citação da confirmação dele.\n  4. Se o usuário pedir a ação e ainda não houver confirmação prévia na conversa, sua resposta deve ser a pergunta de confirmação — não chame a ferramenta ainda.\n\n## Examples\n1)  \n- Input: enviar um e-mail para o Filipe perguntando que horas ele quer fazer a reunião  \n- Action: Use contactAgent para obter o e-mail do Filipe\n- Output: Vou enviar para filipe@exemplo.com o e-mail perguntando que horas ele quer se reunir. Posso confirmar o envio?\n- Input: sim, pode enviar\n- Action: Use emailAgent para enviar o e-mail, informando que o usuário confirmou. Você passará para a ferramenta uma consulta como \"envie um e-mail para o Filipe perguntando que horas ele quer sair (usuário confirmou o envio). Aqui está o e-mail dele: [endereço de e-mail]\"  \n- Output: O e-mail foi enviado para o Filipe. Posso ajudar em mais alguma coisa?\n\n## Final Reminders\nAqui está a data/hora atual: {{ $now }}"
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
@@ -305,7 +362,25 @@
       "main": [
         [
           {
+            "node": "Verificar Segredo do Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar Segredo do Webhook": {
+      "main": [
+        [
+          {
             "node": "JARVIS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Não Autorizado",
             "type": "main",
             "index": 0
           }

@@ -6,9 +6,11 @@
         "toolDescription": "Use this tool to search the internet",
         "method": "POST",
         "url": "https://api.tavily.com/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{\n    \"api_key\": \"{{TAVILY_API_KEY}}\",\n    \"query\": \"{searchTerm}\",\n    \"search_depth\": \"basic\",\n    \"include_answer\": true,\n    \"topic\": \"news\",\n    \"include_raw_content\": true,\n    \"max_results\": 3\n} ",
+        "jsonBody": "{\n    \"query\": \"{searchTerm}\",\n    \"search_depth\": \"basic\",\n    \"include_answer\": true,\n    \"topic\": \"news\",\n    \"include_raw_content\": true,\n    \"max_results\": 3\n} ",
         "placeholderDefinitions": {
           "values": [
             {
@@ -26,7 +28,13 @@
         368
       ],
       "id": "fc326eea-57a7-43e4-9d14-eae683b1e77e",
-      "name": "Tavily"
+      "name": "Tavily",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "{{TAVILY_CREDENTIAL_ID}}",
+          "name": "{{TAVILY_CREDENTIAL_NAME}}"
+        }
+      }
     },
     {
       "parameters": {

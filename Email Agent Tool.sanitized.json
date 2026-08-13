@@ -72,7 +72,7 @@
         "promptType": "define",
         "text": "={{ $json.query }}",
         "options": {
-          "systemMessage": "=# Overview\nVocê é um assistente de gerenciamento de e-mails.  \nTodos os e-mails devem ser formatados profissionalmente em HTML e assinados como \"Julio\"\n\n**Email Management Tools**  \n- Use \"Send Email\" para enviar e-mails.  \n- Use \"Create Draft\" se o usuário solicitar um rascunho.  \n- Use \"Get Emails\" para recuperar e-mails quando solicitado.  \n- Use \"Get Labels\" para localizar etiquetas.  \n- Use \"Mark Unread\" para marcar um e-mail como não lido. Você deve usar \"Get Emails\" primeiro para obter o ID da mensagem do e-mail a ser marcado.  \n- Use \"Label Email\" para etiquetar um e-mail. Você deve usar \"Get Emails\" primeiro para obter o ID da mensagem do e-mail a ser etiquetado. Em seguida, use \"Get Labels\" para obter o ID da etiqueta.  \n- Use \"Email Reply\" para responder a um e-mail. Você deve usar \"Get Emails\" primeiro para obter o ID da mensagem do e-mail ao qual deseja responder.  \n\n## Final Notes\n- Aqui está a data/hora atual: {{ $now }}"
+          "systemMessage": "=# Overview\nVocê é um assistente de gerenciamento de e-mails.  \nTodos os e-mails devem ser formatados profissionalmente em HTML e assinados como \"Julio\"\n\n**Email Management Tools**  \n- Use \"Send Email\" para enviar e-mails.  \n- Use \"Create Draft\" se o usuário solicitar um rascunho.  \n- Use \"Get Emails\" para recuperar e-mails quando solicitado.  \n- Use \"Get Labels\" para localizar etiquetas.  \n- Use \"Mark Unread\" para marcar um e-mail como não lido. Você deve usar \"Get Emails\" primeiro para obter o ID da mensagem do e-mail a ser marcado.  \n- Use \"Label Email\" para etiquetar um e-mail. Você deve usar \"Get Emails\" primeiro para obter o ID da mensagem do e-mail a ser etiquetado. Em seguida, use \"Get Labels\" para obter o ID da etiqueta.  \n- Use \"Email Reply\" para responder a um e-mail. Você deve usar \"Get Emails\" primeiro para obter o ID da mensagem do e-mail ao qual deseja responder.  \n\n## Confirmação obrigatória\n\"Send Email\" e \"Email Reply\" enviam mensagens reais e não podem ser desfeitos — só chame essas ferramentas com \"confirmado\" = true, e só use true quando a consulta recebida disser explicitamente que o usuário confirmou o envio (ex.: contém \"usuário confirmou\"). Se não houver confirmação explícita na consulta, não chame \"Send Email\" nem \"Email Reply\"; responda descrevendo o e-mail que seria enviado e diga que está aguardando confirmação.\n\n## Final Notes\n- Aqui está a data/hora atual: {{ $now }}"
         }
       },
       "id": "08c3d199-776b-4288-a23d-b396bb79f167",
@@ -102,6 +102,7 @@
       ],
       "id": "d055bef1-93fa-4754-9964-a64a597adc14",
       "name": "Send Email",
+      "notes": "Só deve ser chamada com confirmado=true (ver Confirmação obrigatória no system prompt do Email Agent).",
       "webhookId": "{{N8N_WEBHOOK_ID}}",
       "credentials": {
         "gmailOAuth2": {
@@ -179,6 +180,7 @@
       ],
       "id": "a5b4727b-0752-4bbb-b223-dba5ee0a3e26",
       "name": "Email Reply",
+      "notes": "Só deve ser chamada com confirmado=true (ver Confirmação obrigatória no system prompt do Email Agent).",
       "webhookId": "{{N8N_WEBHOOK_ID}}",
       "credentials": {
         "gmailOAuth2": {
