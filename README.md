@@ -1,8 +1,9 @@
 # JARVIS
 
 Assistente pessoal por voz: interface HUD web (estilo Homem de Ferro) + orquestrador de agentes
-de IA rodando em [n8n](https://n8n.io). O plano de evolução completo está documentado à parte
-(artifact "JARVIS — Plano de Evolução").
+de IA rodando em [n8n](https://n8n.io). O plano de evolução, status atual das fases e pendências
+estão em [PLANO_EVOLUCAO.md](PLANO_EVOLUCAO.md) — leia esse arquivo antes de continuar o trabalho,
+ele evita ter que reanalisar o projeto do zero.
 
 ## Arquitetura
 
