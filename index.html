@@ -11,7 +11,31 @@
     <div class="hud-container">
         <!-- Grid Pattern Background -->
         <div class="grid-background"></div>
-        
+
+        <!-- Barra de status superior — reflete o estado real da conversa (ver script.js) -->
+        <div class="hud-topbar">
+            <div class="topbar-brand">
+                <span class="topbar-brand-chevron">&gt;_</span>
+                <span class="topbar-brand-name">JARVIS</span>
+                <span class="topbar-brand-sub">HUD SYSTEM</span>
+            </div>
+            <div class="topbar-actions">
+                <button class="topbar-vision" id="topbarVision" title="Compartilhar câmera com o Jarvis">
+                    <span class="topbar-vision-icon">&#128247;</span> SHARE VISION
+                </button>
+                <button class="topbar-gestures" id="topbarGestures" title="Canvas de caixas controlado por gestos da mão">
+                    <span class="topbar-gestures-icon">&#9995;</span> GESTOS
+                </button>
+                <div class="topbar-status" id="topbarStatus">
+                    <span class="status-dot-pill"></span>
+                    <span id="topbarStatusText">DESCONECTADO</span>
+                </div>
+                <button class="topbar-sleep" id="topbarSleep" title="Encerrar conversa">
+                    <span class="topbar-sleep-icon">&#9211;</span> SLEEP
+                </button>
+            </div>
+        </div>
+
         <!-- Top Left - Earth Status -->
         <div class="hud-panel top-left">
             <div class="earth-hologram">
@@ -78,11 +102,24 @@
         <!-- Center - Main HUD -->
         <div class="hud-panel center">
             <div class="hologram-container">
-                <img src="hologram.gif" alt="Holographic Figure" class="hologram-gif">
+                <!-- Rosto sintetizador de voz em 3D (Three.js, ver visualizer3d.js), reage ao áudio
+                     real da conversa — não é um GIF estático. -->
+                <canvas id="faceCanvas" class="face-canvas"></canvas>
+                <button id="visualizerModeToggle" class="visualizer-mode-toggle" title="Alternar visual do Jarvis">ORBE</button>
                 <div class="jarvis-label">
                     <h1>JARVIS</h1>
                     <div class="label-line"></div>
                 </div>
+
+                <!-- Visão por câmera: só aparece depois de "SHARE VISION" na barra superior.
+                     "OLHAR AGORA" manda o frame atual pro Jarvis analisar de verdade (ver
+                     lookAtCamera() em script.js) — não é automático, é uma ação explícita. -->
+                <div class="vision-preview" id="visionPreview" hidden>
+                    <span class="vision-preview-label">OPTICAL FEED</span>
+                    <video id="visionVideo" autoplay muted playsinline></video>
+                    <button id="visionLookBtn" class="vision-look-btn" disabled>OLHAR AGORA</button>
+                </div>
+                <canvas id="visionCaptureCanvas" hidden></canvas>
             </div>
             
             <div class="voice-controls">
@@ -122,18 +159,30 @@
             </div>
         </div>
 
-        <!-- Right Side - Data Log -->
+        <!-- Right Side - Data Log (reflete eventos reais da conversa, ver script.js) -->
         <div class="hud-panel right-side">
+            <!-- Saída bruta da última ferramenta chamada pelo agente (full_tool_result do evento
+                 agent_tool_response_full_payload, ver script.js) — mostra o texto cru, sem
+                 recorte, complementando o painel de fontes (que só extrai as URLs). -->
+            <div class="output-buffer">
+                <div class="output-buffer-title">OUTPUT BUFFER</div>
+                <div class="output-buffer-content" id="outputBufferContent">Nenhuma saída de sistema...</div>
+            </div>
+
             <div class="data-log">
-                <div class="log-content">
-                    <div class="log-line">[SYSTEM] JARVIS INITIALIZED</div>
-                    <div class="log-line">[AUDIO] VOICE RECOGNITION ACTIVE</div>
-                    <div class="log-line">[NETWORK] ELEVENLABS CONNECTED</div>
-                    <div class="log-line">[STATUS] ALL SYSTEMS OPERATIONAL</div>
-                    <div class="log-line">[READY] AWAITING USER INPUT</div>
+                <div class="log-content" id="logContent">
+                    <div class="log-line">[SISTEMA] JARVIS INICIALIZADO</div>
+                    <div class="log-line">[SISTEMA] AGUARDANDO ATIVAÇÃO DO MICROFONE</div>
                 </div>
             </div>
-            
+
+            <!-- Fontes usadas pelo agente ao pesquisar (evento real agent_tool_response do SDK
+                 ElevenLabs, ver script.js) — fica escondido até a primeira pesquisa acontecer. -->
+            <div class="sources-panel" id="sourcesPanel" hidden>
+                <div class="sources-title">FONTES DA PESQUISA</div>
+                <div class="sources-list" id="sourcesList"></div>
+            </div>
+
             <div class="data-displays">
                 <div class="display-circle">
                     <div class="circle-label">DY</div>
@@ -170,11 +219,52 @@
         </div>
     </div>
 
-    <!-- ElevenLabs ConvAI Widget -->
-<!--    <elevenlabs-convai agent-id="agent_4201k3fgz4g9esvbdy9vpnhe5ebz"></elevenlabs-convai>-->
-<!--    <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>-->
-<elevenlabs-convai agent-id="agent_7001ktkn543wf7t9s7fv643vjm7z"></elevenlabs-convai><script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
-    
+    <!-- Canvas de caixas controlado por gestos da mão (ver gestures.js). Fica por cima de tudo,
+         escondido até o botão GESTOS na barra superior ser ativado. -->
+    <div class="gesture-overlay" id="gestureOverlay" hidden>
+        <div class="gesture-overlay-header">
+            <span class="gesture-overlay-title">&#9995; CANVAS DE GESTOS</span>
+            <span class="gesture-box-count" id="gestureBoxCount">0 CAIXAS</span>
+            <span class="gesture-status" id="gestureStatus">INICIANDO...</span>
+            <div class="gesture-overlay-actions">
+                <button class="gesture-new-box-btn" id="gestureNewBoxBtn">+ NOVA CAIXA</button>
+                <button class="gesture-close-btn" id="gestureCloseBtn">FECHAR ×</button>
+            </div>
+        </div>
+        <div class="gesture-canvas-area" id="gestureCanvasArea">
+            <div class="gesture-world" id="gestureWorld"></div>
+            <svg class="gesture-svg" id="gestureSvg"></svg>
+            <div class="gesture-cursor" id="gestureCursor"></div>
+            <div class="gesture-trash" id="gestureTrash" title="Arraste uma caixa até aqui (beliscando) pra apagar">&#128465;</div>
+        </div>
+        <video id="gestureVideo" class="gesture-video-preview" autoplay muted playsinline></video>
+        <div class="gesture-hint">
+            MÃO ABERTA move o cursor · BELISCAR arrasta caixas até a lixeira pra apagar (ou puxa uma
+            conexão pela alcinha) · PUNHO FECHADO cria uma caixa e dita o que você falar · DUAS MÃOS
+            afastando/aproximando dá zoom no canvas
+        </div>
+    </div>
+
+    <!-- ElevenLabs Conversational AI — SDK oficial (@elevenlabs/client), controlado via script.js.
+         Substituiu o widget <elevenlabs-convai> embutido: o widget escondia sua própria UI via CSS
+         (ver histórico), o que impedia a conversa de iniciar de verdade. Com o SDK, a conversa é
+         controlada por código e o botão/painel do HUD refletem o estado real. -->
+    <script src="https://unpkg.com/@elevenlabs/client@1.18.0/dist/lib.iife.js"></script>
+
+    <!-- Three.js (rosto 3D, ver visualizer3d.js) via importmap — sem passo de build. -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module" src="visualizer3d.js"></script>
+
+    <!-- Controle por gestos (rastreamento de mão via MediaPipe, ver gestures.js). -->
+    <script type="module" src="gestures.js"></script>
+
     <script src="script.js"></script>
 </body>
 </html>
