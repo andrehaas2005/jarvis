@@ -20,6 +20,16 @@
                 <span class="topbar-brand-sub">HUD SYSTEM</span>
             </div>
             <div class="topbar-actions">
+                <button class="topbar-wake" id="topbarWake" title="Ativação por voz: diga 'Jarvis, ativar' (ou outra frase) para iniciar a conversa sem clicar">
+                    <span class="topbar-wake-icon">&#127908;</span> ATIVAÇÃO POR VOZ
+                </button>
+                <button class="topbar-music" id="topbarMusic" title="Música de fundo durante a conversa (clique para ligar/desligar)">
+                    <span class="topbar-music-icon">&#127925;</span> MÚSICA
+                </button>
+                <button class="topbar-music-swap" id="topbarMusicSwap" title="Testar outro arquivo de música (só nesta sessão — para trocar a faixa padrão, veja assets/music/)">
+                    &#128193;
+                </button>
+                <input type="file" id="musicFileInput" accept="audio/*" hidden>
                 <button class="topbar-vision" id="topbarVision" title="Compartilhar câmera com o Jarvis">
                     <span class="topbar-vision-icon">&#128247;</span> SHARE VISION
                 </button>
@@ -36,19 +46,28 @@
             </div>
         </div>
 
-        <!-- Top Left - Earth Status -->
+        <!-- Top Left - Clima real + relógio mundial (nada de "EARTH N33" decorativo — ver
+             loadWeather()/updateWorldClocks() em script.js) -->
         <div class="hud-panel top-left">
             <div class="earth-hologram">
                 <img src="earthhologram.gif" alt="Earth Hologram" class="earth-gif">
             </div>
             <div class="status-display">
                 <div class="status-line">
-                    <span class="label">EARTH</span>
-                    <span class="value">N33</span>
+                    <span class="label">CLIMA</span>
+                    <span class="value" id="weatherValue">carregando...</span>
                 </div>
-                <div class="status-line">
-                    <span class="label">NWO</span>
-                    <span class="value active">ACTIVATED</span>
+                <div class="status-line" id="worldClockSP">
+                    <span class="label">SÃO PAULO</span>
+                    <span class="value active" id="clockSP">--:--</span>
+                </div>
+                <div class="status-line" id="worldClockNY">
+                    <span class="label">NOVA YORK</span>
+                    <span class="value" id="clockNY">--:--</span>
+                </div>
+                <div class="status-line" id="worldClockLON">
+                    <span class="label">LONDRES</span>
+                    <span class="value" id="clockLON">--:--</span>
                 </div>
             </div>
         </div>
@@ -106,10 +125,10 @@
                      real da conversa — não é um GIF estático. -->
                 <canvas id="faceCanvas" class="face-canvas"></canvas>
                 <button id="visualizerModeToggle" class="visualizer-mode-toggle" title="Alternar visual do Jarvis">ORBE</button>
-                <div class="jarvis-label">
-                    <h1>JARVIS</h1>
-                    <div class="label-line"></div>
-                </div>
+                <!-- Relógio central do modo "ANEL" — texto HTML sobreposto ao canvas (mais nítido
+                     que renderizar texto em 3D), atualizado em tempo real por updateClock() em
+                     visualizer3d.js. Só aparece nesse modo. -->
+                <div id="ringClock" class="ring-clock" style="display: none;"></div>
 
                 <!-- Visão por câmera: só aparece depois de "SHARE VISION" na barra superior.
                      "OLHAR AGORA" manda o frame atual pro Jarvis analisar de verdade (ver
@@ -183,31 +202,44 @@
                 <div class="sources-list" id="sourcesList"></div>
             </div>
 
+            <!-- Estatísticas reais da conversa (nada de números aleatórios — ver script.js) -->
             <div class="data-displays">
-                <div class="display-circle">
-                    <div class="circle-label">DY</div>
+                <div class="stat-item">
+                    <div class="display-circle" title="Duração da conversa atual">
+                        <div class="circle-label" id="statDuration">0:00</div>
+                    </div>
+                    <span class="stat-caption">DURAÇÃO</span>
                 </div>
-                <div class="display-circle">
-                    <div class="circle-label">53</div>
+                <div class="stat-item">
+                    <div class="display-circle" title="Mensagens trocadas nesta conversa">
+                        <div class="circle-label" id="statMessages">0</div>
+                    </div>
+                    <span class="stat-caption">MENSAGENS</span>
                 </div>
-                <div class="display-circle">
-                    <div class="circle-label">PH</div>
+                <div class="stat-item">
+                    <div class="display-circle" title="Latência da conexão (ping real do SDK)">
+                        <div class="circle-label" id="statLatency">--</div>
+                    </div>
+                    <span class="stat-caption">LATÊNCIA</span>
                 </div>
-                <div class="display-circle">
-                    <div class="circle-label">KL</div>
+                <div class="stat-item">
+                    <div class="display-circle" title="Câmera compartilhada com o Jarvis?">
+                        <div class="circle-label" id="statCamera">OFF</div>
+                    </div>
+                    <span class="stat-caption">CÂMERA</span>
                 </div>
             </div>
-            
+
+            <!-- Medidor de volume real — reage à sua voz e à do Jarvis de verdade, mesmo dado de
+                 áudio que já move o orbe/rosto/anel (ver startAudioLevelLoop em script.js) -->
             <div class="wave-displays">
-                <div class="wave-container">
-                    <div class="wave wave-1"></div>
-                    <div class="wave wave-2"></div>
-                    <div class="wave wave-3"></div>
+                <div class="vu-meter">
+                    <span class="vu-label">VOCÊ</span>
+                    <div class="vu-bar"><div class="vu-bar-fill" id="vuInput"></div></div>
                 </div>
-                <div class="wave-container">
-                    <div class="wave wave-1"></div>
-                    <div class="wave wave-2"></div>
-                    <div class="wave wave-3"></div>
+                <div class="vu-meter">
+                    <span class="vu-label">JARVIS</span>
+                    <div class="vu-bar"><div class="vu-bar-fill" id="vuOutput"></div></div>
                 </div>
             </div>
         </div>
@@ -244,6 +276,11 @@
             afastando/aproximando dá zoom no canvas
         </div>
     </div>
+
+    <!-- Música de fundo tocada durante a conversa (25% do volume da voz do Jarvis — ver
+         script.js). Sem arquivo por padrão: coloque um mp3/wav em assets/music/ e aponte
+         BACKGROUND_MUSIC_SRC no script.js para ativar. -->
+    <audio id="bgMusicPlayer" loop preload="none"></audio>
 
     <!-- ElevenLabs Conversational AI — SDK oficial (@elevenlabs/client), controlado via script.js.
          Substituiu o widget <elevenlabs-convai> embutido: o widget escondia sua própria UI via CSS

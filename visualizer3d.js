@@ -1,12 +1,18 @@
 // ============================================================================
 // JARVIS — visualizador 3D do rosto/voz (substitui o desenho em canvas 2D).
-// Duas variações selecionáveis em tempo real (ver toggle no HTML):
+// Três variações selecionáveis em tempo real (ver toggle no HTML):
 //   'orb'  → esfera de plasma orgânica, deforma e brilha MUITO com a fala
 //   'face' → rosto 3D real (modelo "Face Cap" distribuído nos exemplos oficiais do
 //            three.js — github.com/mrdoob/three.js/tree/dev/examples/models/gltf,
 //            crédito bannaflak.com/face-cap), com blend shapes de verdade movendo a
 //            boca conforme o volume real da fala. Se o modelo não carregar (rede
 //            fora do ar etc.), cai de volta pro rosto wireframe simples.
+//   'ring' → anel fibroso + relógio central + traços tipo equalizador, no espírito
+//            de uma referência visual que o usuário trouxe (vídeo de template de HUD
+//            sci-fi). Só os estados genéricos do vídeo foram usados como base — os
+//            trechos que mostravam o capacete/armadura do Homem de Ferro (arte de
+//            personagem da Marvel) foram propositalmente ignorados; a forma aqui é
+//            um design original, desenhado do zero.
 // Carregado como módulo ES (ver <script type="importmap"> no index.html); expõe
 // window.Visualizer3D pra script.js (script clássico) consumir.
 // ============================================================================
@@ -101,6 +107,99 @@ function buildOrb() {
             const scale = 1 + level * 0.35;
             group.scale.setScalar(scale);
             wireMat.opacity = 0.08 + level * 0.55;
+        },
+    };
+}
+
+// Anel fibroso + traços tipo equalizador ao redor de um relógio central (o relógio em si é HTML,
+// não 3D — ver clockEl/updateClock() na classe principal). O anel externo amassa mais quanto mais
+// alto o volume da fala, e os traços ao redor brilham em onda — como um equalizador de áudio.
+function buildRing() {
+    const group = new THREE.Group();
+
+    const outerMat = new THREE.ShaderMaterial({
+        uniforms: {
+            uTime: { value: 0 },
+            uLevel: { value: 0 },
+            uColor: { value: new THREE.Color(0x1fe8cf) },
+        },
+        vertexShader: `
+            uniform float uTime;
+            uniform float uLevel;
+            varying float vGlow;
+
+            float fieldNoise(vec3 p, float t) {
+                return sin(p.x * 3.0 + t * 0.5)
+                     + sin(p.y * 2.4 - t * 0.7)
+                     + sin(p.z * 3.6 + t * 0.3);
+            }
+
+            void main() {
+                // Limita o pico do ruído (a soma de 3 senos raramente, mas eventualmente, bate
+                // perto do máximo teórico ±1 ao mesmo tempo) — sem isso, de vez em quando um "bico"
+                // do anel passava da borda do quadro justamente nesses picos raros, mesmo em
+                // repouso (a respiração do modo parado já soma uLevel até ~0.25 sozinha).
+                float n = clamp(fieldNoise(position * 2.0, uTime) / 3.0, -0.72, 0.72);
+                float amount = 0.045 + uLevel * 0.32;
+                vec3 displaced = position + normal * n * amount;
+                vGlow = 0.5 + n * 0.5;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform vec3 uColor;
+            uniform float uLevel;
+            varying float vGlow;
+            void main() {
+                vec3 color = uColor * (0.5 + vGlow * 0.7 + uLevel * 0.6);
+                gl_FragColor = vec4(color, 0.92);
+            }
+        `,
+        transparent: true,
+    });
+    const outerMesh = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.1, 16, 160), outerMat);
+    group.add(outerMesh);
+
+    // Anel fino do meio — quase estático, só de referência visual (como na imagem original)
+    const midMat = new THREE.MeshBasicMaterial({ color: 0x0f8f80, transparent: true, opacity: 0.35 });
+    const midMesh = new THREE.Mesh(new THREE.TorusGeometry(0.82, 0.006, 8, 100), midMat);
+    group.add(midMesh);
+
+    // Traços em círculo, tipo equalizador — cada um com fase própria pra criar um efeito de onda
+    // percorrendo o anel, mais intenso quanto mais alto o volume da fala.
+    const dashCount = 48;
+    const dashGroup = new THREE.Group();
+    const dashes = [];
+    for (let i = 0; i < dashCount; i++) {
+        const angle = (i / dashCount) * Math.PI * 2;
+        const dashMat = new THREE.MeshBasicMaterial({ color: 0x33fbe0, transparent: true, opacity: 0.3 });
+        const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.022, 0.085), dashMat);
+        const radius = 0.66;
+        dash.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
+        dash.rotation.z = angle + Math.PI / 2;
+        dashGroup.add(dash);
+        dashes.push({ mat: dashMat, mesh: dash, phase: (i / dashCount) * Math.PI * 2 });
+    }
+    group.add(dashGroup);
+
+    return {
+        group,
+        // Distância da câmera controla o tamanho aparente do anel. Recuada um pouco (de 5.5 pra
+        // 5.8) depois de detectar corte lateral intermitente nos picos raros do ruído em repouso —
+        // ver o clamp() no shader acima também.
+        cameraZ: 5.8,
+        update(level, active, time) {
+            outerMat.uniforms.uTime.value = time;
+            outerMat.uniforms.uLevel.value = level;
+            group.rotation.z = time * 0.015;
+            dashGroup.rotation.z = -time * 0.05;
+
+            dashes.forEach((d, i) => {
+                const wave = (Math.sin(time * 2.6 + d.phase + i * 0.25) + 1) / 2;
+                const glow = active ? level * (0.4 + wave * 0.6) : 0.12 + wave * 0.12;
+                d.mat.opacity = 0.18 + glow * 0.82;
+                d.mesh.scale.y = 1 + glow * 2.1;
+            });
         },
     };
 }
@@ -251,6 +350,7 @@ export class Visualizer3D {
         this.running = false;
         this.time = 0;
         this.mode = localStorage.getItem('jarvis-visualizer-mode') || 'orb';
+        this.clockEl = document.getElementById('ringClock');
 
         this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -269,9 +369,10 @@ export class Visualizer3D {
         this.scene.add(rim);
 
         this.orb = buildOrb();
+        this.ring = buildRing();
         this.fallbackHead = buildFallbackHead();
         this.realisticHead = buildRealisticHead(this.renderer, () => this.onHeadReady());
-        this.scene.add(this.orb.group, this.fallbackHead.group, this.realisticHead.group);
+        this.scene.add(this.orb.group, this.ring.group, this.fallbackHead.group, this.realisticHead.group);
 
         this.applyMode();
         this.resize();
@@ -290,7 +391,7 @@ export class Visualizer3D {
     }
 
     setMode(mode) {
-        if (mode !== 'orb' && mode !== 'face') return;
+        if (!['orb', 'face', 'ring'].includes(mode)) return;
         this.mode = mode;
         localStorage.setItem('jarvis-visualizer-mode', mode);
         this.applyMode();
@@ -303,10 +404,22 @@ export class Visualizer3D {
     applyMode() {
         const head = this.getActiveHead();
         this.orb.group.visible = this.mode === 'orb';
+        this.ring.group.visible = this.mode === 'ring';
         this.realisticHead.group.visible = this.mode === 'face' && head === this.realisticHead;
         this.fallbackHead.group.visible = this.mode === 'face' && head === this.fallbackHead;
-        const active = this.mode === 'orb' ? this.orb : head;
+        const active = this.mode === 'orb' ? this.orb : this.mode === 'ring' ? this.ring : head;
         this.camera.position.z = active.cameraZ;
+        if (this.clockEl) this.clockEl.style.display = this.mode === 'ring' ? 'flex' : 'none';
+    }
+
+    updateClock() {
+        if (!this.clockEl) return;
+        const now = new Date();
+        const hours12 = now.getHours() % 12 || 12;
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
+        this.clockEl.innerHTML = `${hours12}:${minutes}<span class="ring-clock-sub">${ampm}<br>:${seconds}</span>`;
     }
 
     resize() {
@@ -349,6 +462,9 @@ export class Visualizer3D {
 
         if (this.mode === 'orb') {
             this.orb.update(glow, this.active, this.time);
+        } else if (this.mode === 'ring') {
+            this.ring.update(glow, this.active, this.time);
+            this.updateClock();
         } else {
             this.getActiveHead().update(glow, this.active, this.time);
         }

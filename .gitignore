@@ -5,3 +5,8 @@ Thumbs.db
 node_modules/
 *.log
 .claude/
+
+# Música de fundo local (script.js → BACKGROUND_MUSIC_SRC). Nunca comitar: são faixas com direitos
+# autorais de terceiros, só devem existir na sua máquina — troque o arquivo aqui sempre que quiser
+# mudar a trilha (ou use o botão "MÚSICA" no HUD pra desligar).
+assets/music/

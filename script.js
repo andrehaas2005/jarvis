@@ -1,7 +1,29 @@
 // JARVIS Interface JavaScript
 
 // ID do agente ElevenLabs Conversational AI (painel da ElevenLabs → seu agente).
-const ELEVENLABS_AGENT_ID = 'agent_7001ktkn543wf7t9s7fv643vjm7z';
+const ELEVENLABS_AGENT_ID = 'agent_0401ktc7pg1xev08smgfd1t20m52';
+
+// Música de fundo tocada durante a conversa, a 25% do volume. O arquivo em si NÃO fica no git
+// (ver .gitignore — é conteúdo com direitos autorais, só existe na sua máquina). Pra trocar a
+// faixa padrão, é só substituir o arquivo em assets/music/background.mp3 por outro mp3/wav
+// (mesmo nome). Pra testar uma faixa diferente sem mexer em arquivo nenhum, ou desligar a música,
+// use o botão "MÚSICA" na barra superior do HUD.
+const BACKGROUND_MUSIC_SRC = 'assets/music/background.mp3';
+const BACKGROUND_MUSIC_VOLUME = 0.25;
+
+// Frases de ativação por voz — diga qualquer uma delas com o microfone liberado (fora de uma
+// conversa) que o Jarvis inicia a conversa sozinho, sem precisar clicar em "Sistema Ativo".
+const WAKE_PHRASES = [
+    'jarvis ativar',
+    'e ai jarvis',
+    'e aí jarvis',
+    'jarvis esta me ouvindo',
+    'jarvis está me ouvindo',
+    'jarvis podemos conversar',
+    'jarvis vamos conversar',
+    'jarvis voce esta pronto',
+    'jarvis você está pronto',
+];
 
 class JARVISInterface {
     constructor() {
@@ -35,6 +57,45 @@ class JARVISInterface {
         this.conversationActive = false;
         this.currentMode = 'listening'; // 'listening' | 'speaking' — espelha onModeChange do SDK
         this.audioLevelLoopId = null;
+
+        // Widgets com dados reais (nada de números aleatórios — ver openGestureCanvas... digo,
+        // startConversation() e startAudioLevelLoop() mais abaixo).
+        this.statDuration = document.getElementById('statDuration');
+        this.statMessages = document.getElementById('statMessages');
+        this.statLatency = document.getElementById('statLatency');
+        this.statCamera = document.getElementById('statCamera');
+        this.vuInput = document.getElementById('vuInput');
+        this.vuOutput = document.getElementById('vuOutput');
+        this.weatherValue = document.getElementById('weatherValue');
+        this.clockSP = document.getElementById('clockSP');
+        this.clockNY = document.getElementById('clockNY');
+        this.clockLON = document.getElementById('clockLON');
+        this.conversationStartedAt = null;
+        this.messageCount = 0;
+        this.durationTimerId = null;
+
+        // Ativação por voz (wake word) — reconhecimento contínuo rodando em segundo plano,
+        // pausado durante a conversa e com o canvas de gestos aberto (os dois usam o mesmo
+        // SpeechRecognition do navegador, que só roda uma instância por vez).
+        this.topbarWake = document.getElementById('topbarWake');
+        this.wakeRecognizer = null;
+        this.wakeListening = false; // reflete se o reconhecimento está de fato rodando agora
+        this.wakeEnabled = true; // liga/desliga a funcionalidade (botão da topbar)
+
+        // Música de fundo (ver BACKGROUND_MUSIC_SRC no topo do arquivo)
+        this.bgMusic = document.getElementById('bgMusicPlayer');
+        this.topbarMusic = document.getElementById('topbarMusic');
+        this.topbarMusicSwap = document.getElementById('topbarMusicSwap');
+        this.musicFileInput = document.getElementById('musicFileInput');
+        this.musicEnabled = localStorage.getItem('jarvis-music-enabled') !== 'false'; // ligada por padrão
+        this.customMusicObjectUrl = null; // faixa trocada pelo botão 📁 — só dura a sessão atual
+        this.musicFileMissing = false; // evita spam de aviso se o mp3 não existir
+
+        // Rotina do primeiro contato do dia (clima + previsão de chuva + agenda) — injetada via
+        // dynamicVariables do SDK da ElevenLabs, referenciada como {{daily_briefing}} na primeira
+        // mensagem do agente (configurado no painel da ElevenLabs).
+        this.dailyBriefingText = '';
+
         this.visualizerModeToggle = document.getElementById('visualizerModeToggle');
         // Visualizer3D (Three.js) é definido em visualizer3d.js, carregado como módulo antes deste
         // script — ver <script type="module"> no index.html.
@@ -46,11 +107,322 @@ class JARVISInterface {
         this.startSystemAnimations();
         this.syncVisualizerModeButton();
         this.syncTopbarStatus();
+
+        this.updateWorldClocks();
+        setInterval(() => this.updateWorldClocks(), 30000);
+        this.loadWeather();
+
+        this.setupBackgroundMusic();
+        this.setupWakeWordListener();
+    }
+
+    // ------------------------------------------------------------------
+    // Música de fundo
+    // ------------------------------------------------------------------
+
+    setupBackgroundMusic() {
+        if (!this.bgMusic) return;
+
+        this.bgMusic.src = this.customMusicObjectUrl || BACKGROUND_MUSIC_SRC;
+        this.bgMusic.volume = 0;
+        this.bgMusic.onerror = () => {
+            if (this.musicFileMissing) return;
+            this.musicFileMissing = true;
+            this.pushLog('[MÚSICA] Nenhum arquivo encontrado em assets/music/background.mp3');
+        };
+
+        // Botão MÚSICA liga/desliga (preferência salva — persiste entre sessões)
+        this.syncMusicButton();
+        if (this.topbarMusic) {
+            this.topbarMusic.addEventListener('click', () => {
+                this.musicEnabled = !this.musicEnabled;
+                localStorage.setItem('jarvis-music-enabled', String(this.musicEnabled));
+                this.syncMusicButton();
+                if (this.musicEnabled && this.conversationActive) this.playBackgroundMusic();
+                if (!this.musicEnabled) this.stopBackgroundMusic();
+            });
+        }
+
+        // Botão 📁 troca a faixa por qualquer arquivo local — só durante esta sessão (o navegador
+        // não guarda o arquivo entre recarregamentos; pra trocar a faixa padrão de vez, substitua
+        // assets/music/background.mp3).
+        if (this.topbarMusicSwap && this.musicFileInput) {
+            this.topbarMusicSwap.addEventListener('click', () => this.musicFileInput.click());
+            this.musicFileInput.addEventListener('change', () => {
+                const file = this.musicFileInput.files?.[0];
+                if (!file) return;
+                if (this.customMusicObjectUrl) URL.revokeObjectURL(this.customMusicObjectUrl);
+                this.customMusicObjectUrl = URL.createObjectURL(file);
+                this.musicFileMissing = false;
+                this.bgMusic.src = this.customMusicObjectUrl;
+                this.pushLog(`[MÚSICA] Faixa trocada para "${file.name}" (só nesta sessão)`);
+                if (this.musicEnabled && this.conversationActive) this.playBackgroundMusic();
+            });
+        }
+    }
+
+    syncMusicButton() {
+        if (!this.topbarMusic) return;
+        this.topbarMusic.classList.toggle('muted', !this.musicEnabled);
+    }
+
+    // Toca a música de fundo com um fade-in suave até 25% do volume máximo. Não faz nada se a
+    // música estiver desligada no botão, ou se não houver arquivo configurado/carregado.
+    playBackgroundMusic() {
+        if (!this.bgMusic || !this.musicEnabled || this.musicFileMissing) return;
+        if (!this.bgMusic.src) return;
+        this.bgMusic.currentTime = 0;
+        this.bgMusic.volume = 0;
+        this.bgMusic.play().catch((error) => {
+            console.warn('Não foi possível tocar a música de fundo:', error.message);
+        });
+        const fadeStep = () => {
+            if (!this.bgMusic || this.bgMusic.paused) return;
+            const target = BACKGROUND_MUSIC_VOLUME;
+            if (this.bgMusic.volume < target) {
+                this.bgMusic.volume = Math.min(target, this.bgMusic.volume + 0.02);
+                requestAnimationFrame(fadeStep);
+            }
+        };
+        requestAnimationFrame(fadeStep);
+    }
+
+    // Fade-out e pausa (ao fim da conversa, ou se a música for desligada no meio dela).
+    stopBackgroundMusic() {
+        if (!this.bgMusic) return;
+        const fadeStep = () => {
+            if (!this.bgMusic) return;
+            if (this.bgMusic.volume > 0.02) {
+                this.bgMusic.volume = Math.max(0, this.bgMusic.volume - 0.02);
+                requestAnimationFrame(fadeStep);
+            } else {
+                this.bgMusic.pause();
+                this.bgMusic.volume = 0;
+            }
+        };
+        requestAnimationFrame(fadeStep);
+    }
+
+    // ------------------------------------------------------------------
+    // Ativação por voz (wake word)
+    // ------------------------------------------------------------------
+
+    // Normaliza acentos/pontuação pra comparar com WAKE_PHRASES sem depender de o reconhecedor
+    // acertar acentuação exata (ex.: "esta"/"está" viram a mesma coisa).
+    static normalizeSpeech(text) {
+        return text
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '') // remove acentos
+            .replace(/[^\w\s]/g, '') // remove pontuação
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    setupWakeWordListener() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            console.warn('SpeechRecognition não suportado neste navegador — ativação por voz desativada.');
+            if (this.topbarWake) {
+                this.topbarWake.disabled = true;
+                this.topbarWake.title = 'Ativação por voz não suportada neste navegador';
+            }
+            return;
+        }
+
+        if (this.topbarWake) {
+            this.topbarWake.addEventListener('click', () => {
+                this.wakeEnabled = !this.wakeEnabled;
+                this.topbarWake.classList.toggle('active', this.wakeEnabled);
+                if (this.wakeEnabled) {
+                    this.pushLog('[VOZ] Ativação por voz ligada — diga uma frase de ativação');
+                    this.startWakeWordListener();
+                } else {
+                    this.pushLog('[VOZ] Ativação por voz desligada');
+                    this.stopWakeWordListener();
+                }
+            });
+            this.topbarWake.classList.add('active');
+        }
+
+        this.startWakeWordListener();
+    }
+
+    startWakeWordListener() {
+        if (!this.wakeEnabled || this.wakeListening) return;
+        // Não roda ao mesmo tempo que uma conversa ativa ou o canvas de gestos (ambos usam o
+        // reconhecimento de voz do navegador, que só permite uma instância por vez).
+        if (this.conversationActive) return;
+        if (this.gestureOverlay && !this.gestureOverlay.hidden) return;
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognizer = new SpeechRecognition();
+        recognizer.lang = 'pt-BR';
+        recognizer.continuous = true;
+        recognizer.interimResults = false;
+
+        recognizer.onresult = (event) => {
+            const lastResult = event.results[event.results.length - 1];
+            if (!lastResult || !lastResult.isFinal) return;
+            const heard = JARVISInterface.normalizeSpeech(lastResult[0].transcript);
+            const matched = WAKE_PHRASES.some((phrase) => heard.includes(JARVISInterface.normalizeSpeech(phrase)));
+            if (matched) {
+                this.pushLog(`[VOZ] Frase de ativação reconhecida: "${lastResult[0].transcript.trim()}"`);
+                this.stopWakeWordListener();
+                this.startConversation();
+            }
+        };
+
+        recognizer.onerror = (event) => {
+            // 'no-speech' e 'aborted' são normais (silêncio prolongado, ou nós mesmos paramos) —
+            // não vale poluir o log com isso.
+            if (event.error !== 'no-speech' && event.error !== 'aborted') {
+                console.warn('Erro no reconhecimento de ativação por voz:', event.error);
+            }
+            // Permissão de microfone negada (ou bloqueada pelo navegador/sandbox): tentar de novo
+            // não vai resolver sozinho, então desligamos a funcionalidade em vez de martelar
+            // reconexões infinitas — o usuário pode religar pelo botão depois de liberar o mic.
+            if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                this.wakeEnabled = false;
+                if (this.topbarWake) this.topbarWake.classList.remove('active');
+                this.pushLog('[VOZ] Ativação por voz desligada — permissão de microfone negada');
+            }
+        };
+
+        recognizer.onend = () => {
+            this.wakeListening = false;
+            // Reinicia sozinho enquanto a funcionalidade estiver ligada e nada estiver ocupando o
+            // reconhecimento de voz (Chrome encerra a sessão sozinho de tempos em tempos).
+            if (this.wakeEnabled && !this.conversationActive && (!this.gestureOverlay || this.gestureOverlay.hidden)) {
+                setTimeout(() => this.startWakeWordListener(), 300);
+            }
+        };
+
+        try {
+            recognizer.start();
+            this.wakeRecognizer = recognizer;
+            this.wakeListening = true;
+        } catch (error) {
+            console.warn('Não foi possível iniciar a ativação por voz:', error.message);
+        }
+    }
+
+    stopWakeWordListener() {
+        if (this.wakeRecognizer) {
+            this.wakeRecognizer.onend = null; // evita reiniciar sozinho ao pararmos de propósito
+            try {
+                this.wakeRecognizer.stop();
+            } catch (error) {
+                // ignora — já pode estar parado
+            }
+            this.wakeRecognizer = null;
+        }
+        this.wakeListening = false;
+    }
+
+    // Hora real de 3 cidades — Intl.DateTimeFormat com timeZone já dá o horário certo sem
+    // precisar de nenhuma API.
+    updateWorldClocks() {
+        const format = (tz) =>
+            new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: tz });
+        if (this.clockSP) this.clockSP.textContent = format('America/Sao_Paulo');
+        if (this.clockNY) this.clockNY.textContent = format('America/New_York');
+        if (this.clockLON) this.clockLON.textContent = format('Europe/London');
+    }
+
+    // Clima real via Open-Meteo (sem precisar de chave de API). Pede sua localização; se você
+    // negar ou o navegador não suportar, cai pra São Paulo como padrão.
+    async loadWeather() {
+        const fallback = { lat: -23.5505, lon: -46.6333, label: 'São Paulo' };
+        let coords = fallback;
+
+        if (navigator.geolocation) {
+            try {
+                const position = await new Promise((resolve, reject) =>
+                    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 }),
+                );
+                coords = { lat: position.coords.latitude, lon: position.coords.longitude, label: 'sua localização' };
+            } catch (error) {
+                console.warn('Geolocalização indisponível, usando São Paulo como padrão:', error.message);
+            }
+        }
+
+        try {
+            // "daily=precipitation_probability_max" traz a chance de chuva do dia inteiro — usada
+            // tanto no widget de clima quanto na rotina de primeiro contato do dia (ver
+            // buildDailyBriefingText()).
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,weather_code&daily=precipitation_probability_max&timezone=auto`;
+            const response = await fetch(url);
+            const data = await response.json();
+            const temp = Math.round(data.current.temperature_2m);
+            const condition = this.weatherCodeToText(data.current.weather_code);
+            this.weatherValue.textContent = `${temp}°C ${condition}`;
+
+            const rainChance = data.daily?.precipitation_probability_max?.[0];
+            this.lastWeather = { temp, condition, rainChance };
+        } catch (error) {
+            console.error('Falha ao buscar clima real:', error);
+            this.weatherValue.textContent = 'indisponível';
+            this.lastWeather = null;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Rotina do primeiro contato do dia (clima + previsão de chuva + agenda)
+    // ------------------------------------------------------------------
+
+    // Monta o texto do briefing (clima real + previsão de chuva + agenda) e devolve pronto pra
+    // virar a variável dinâmica {{daily_briefing}} — vazio se já foi dado hoje, ou se o clima
+    // ainda não carregou a tempo (nesse caso o agente cumprimenta normalmente, sem briefing).
+    getDailyBriefingVariable() {
+        const today = new Date().toLocaleDateString('sv-SE'); // AAAA-MM-DD, estável p/ comparação
+        const lastBriefingDate = localStorage.getItem('jarvis-last-briefing-date');
+        if (lastBriefingDate === today) return '';
+
+        const text = this.buildDailyBriefingText();
+        if (!text) return ''; // clima ainda não carregou — não marca o dia como "já avisado"
+
+        localStorage.setItem('jarvis-last-briefing-date', today);
+        return text;
+    }
+
+    // IMPORTANTE: esta variável é usada na "Primeira mensagem" do agente (painel da ElevenLabs),
+    // que faz substituição literal de {{daily_briefing}} — NÃO passa pelo LLM. Por isso o texto
+    // aqui já precisa ser a fala pronta (não uma instrução), com um "espaço" de sobra no fim pra
+    // encadear com o resto da primeira mensagem configurada lá.
+    buildDailyBriefingText() {
+        if (!this.lastWeather) return '';
+        const { temp, condition, rainChance } = this.lastWeather;
+        const chuvaTexto = typeof rainChance === 'number'
+            ? `${rainChance}% de chance de chuva`
+            : 'previsão de chuva indisponível no momento';
+
+        // Agenda real depende do Agent Tool de calendário do n8n, que ainda está pendente de
+        // configuração (ver PLANO_EVOLUCAO.md) — por ora avisamos isso de forma transparente em
+        // vez de inventar compromissos.
+        return `Antes de mais nada, Senhor: agora está ${temp}°C, ${condition}, com ${chuvaTexto} hoje. ` +
+            `Quanto à sua agenda, ainda não tenho acesso a ela — o calendário do Senhor segue um ` +
+            `mistério que pretendo resolver em breve. `;
+    }
+
+    // Tradução simplificada dos códigos WMO que a Open-Meteo usa (docs: open-meteo.com/en/docs)
+    weatherCodeToText(code) {
+        if (code === 0) return 'céu limpo';
+        if (code <= 2) return 'poucas nuvens';
+        if (code === 3) return 'nublado';
+        if (code <= 48) return 'neblina';
+        if (code <= 57) return 'garoa';
+        if (code <= 67) return 'chuva';
+        if (code <= 77) return 'neve';
+        if (code <= 82) return 'pancadas de chuva';
+        if (code <= 99) return 'tempestade';
+        return '';
     }
 
     syncVisualizerModeButton() {
         if (!this.visualizerModeToggle) return;
-        this.visualizerModeToggle.textContent = this.faceVisualizer.getMode() === 'orb' ? 'ORBE' : 'ROSTO';
+        const labels = { orb: 'ORBE', face: 'ROSTO', ring: 'ANEL' };
+        this.visualizerModeToggle.textContent = labels[this.faceVisualizer.getMode()] || 'ORBE';
     }
 
     initializeInterface() {
@@ -70,10 +442,12 @@ class JARVISInterface {
             this.toggleConversation();
         });
 
-        // Alterna entre as duas variações do visualizador 3D (orbe / rosto wireframe)
+        // Alterna entre as três variações do visualizador 3D (orbe / rosto / anel)
         if (this.visualizerModeToggle) {
+            const order = ['orb', 'face', 'ring'];
             this.visualizerModeToggle.addEventListener('click', () => {
-                const next = this.faceVisualizer.getMode() === 'orb' ? 'face' : 'orb';
+                const current = order.indexOf(this.faceVisualizer.getMode());
+                const next = order[(current + 1) % order.length];
                 this.faceVisualizer.setMode(next);
                 this.syncVisualizerModeButton();
             });
@@ -120,6 +494,7 @@ class JARVISInterface {
         }
         this.gestureOverlay.hidden = false;
         this.topbarGestures.classList.add('active');
+        this.stopWakeWordListener(); // libera o SpeechRecognition do navegador pro ditado de gestos
 
         if (!this.gestureCanvas) {
             this.gestureCanvas = new window.GestureCanvas({
@@ -142,6 +517,7 @@ class JARVISInterface {
         this.gestureOverlay.hidden = true;
         this.topbarGestures.classList.remove('active');
         if (this.gestureCanvas) this.gestureCanvas.stop();
+        this.startWakeWordListener(); // retoma a escuta da frase de ativação
     }
 
     // Espelha o estado real da conexão no pill "CONECTADO/DESCONECTADO" da barra superior.
@@ -152,6 +528,7 @@ class JARVISInterface {
         if (this.topbarSleep) this.topbarSleep.disabled = !this.conversationActive;
         // "Olhar" só faz sentido com câmera ligada E conversa ativa (precisa de conversation.uploadFile)
         if (this.visionLookBtn) this.visionLookBtn.disabled = !this.conversationActive || !this.visionStream;
+        if (this.statCamera) this.statCamera.textContent = this.visionStream ? 'ON' : 'OFF';
     }
 
     async toggleVision() {
@@ -261,6 +638,8 @@ class JARVISInterface {
             return;
         }
 
+        this.stopWakeWordListener(); // libera o SpeechRecognition do navegador pra conversa em si
+
         this.updateVoiceButtonState('listening');
         this.updateVoiceStatus('SOLICITANDO MICROFONE...');
         this.pushLog('[ÁUDIO] Solicitando permissão de microfone...');
@@ -281,6 +660,13 @@ class JARVISInterface {
         try {
             this.conversation = await window.ElevenLabsClient.Conversation.startSession({
                 agentId: ELEVENLABS_AGENT_ID,
+                // Rotina do primeiro contato do dia: clima real + previsão de chuva + agenda,
+                // injetada como variável dinâmica {{daily_briefing}} — usada na primeira mensagem
+                // do agente (configurada no painel da ElevenLabs). Nas próximas conversas do mesmo
+                // dia, vem vazia e o agente cumprimenta normalmente. Ver getDailyBriefingVariable().
+                dynamicVariables: {
+                    daily_briefing: this.getDailyBriefingVariable(),
+                },
                 onConnect: ({ conversationId }) => {
                     this.conversationActive = true;
                     this.updateVoiceButtonState('listening');
@@ -289,6 +675,11 @@ class JARVISInterface {
                     this.faceVisualizer.setActive(true);
                     this.startAudioLevelLoop();
                     this.syncTopbarStatus();
+                    this.conversationStartedAt = Date.now();
+                    this.messageCount = 0;
+                    this.updateStatMessages();
+                    this.startDurationTimer();
+                    this.playBackgroundMusic();
                 },
                 onDisconnect: (details) => {
                     this.conversationActive = false;
@@ -304,6 +695,9 @@ class JARVISInterface {
                     this.faceVisualizer.setActive(false);
                     this.stopAudioLevelLoop();
                     this.syncTopbarStatus();
+                    this.stopDurationTimer();
+                    this.stopBackgroundMusic();
+                    this.startWakeWordListener(); // volta a escutar a frase de ativação
                 },
                 onError: (message) => {
                     this.pushLog(`[ERRO] ${message}`);
@@ -313,6 +707,8 @@ class JARVISInterface {
                     const quem = role === 'user' ? 'VOCÊ' : 'JARVIS';
                     this.pushLog(`[FALA] ${quem}: ${message}`);
                     if (role === 'user') this.maybeAutoLook(message);
+                    this.messageCount++;
+                    this.updateStatMessages();
                     // Com o canvas de gestos aberto, cada resposta do Jarvis também vira uma
                     // caixa nova ali — que você pode arrastar/conectar/apagar com a mão.
                     if (role === 'agent' && this.gestureCanvas && !this.gestureOverlay.hidden) {
@@ -324,6 +720,12 @@ class JARVISInterface {
                 // isso acontece, pro painel refletir de verdade.
                 onInterruption: () => {
                     this.pushLog('[VOZ] Você interrompeu o Jarvis');
+                },
+                // Ping real do SDK — usado no widget de LATÊNCIA (nada de número aleatório)
+                onPing: ({ ping_ms }) => {
+                    if (this.statLatency && typeof ping_ms === 'number') {
+                        this.statLatency.textContent = `${Math.round(ping_ms)}`;
+                    }
                 },
                 onAgentToolRequest: ({ tool_name }) => {
                     this.pushLog(`[FERRAMENTA] Chamando ${tool_name}...`);
@@ -372,6 +774,7 @@ class JARVISInterface {
             this.conversation = null;
             this.faceVisualizer.setActive(false);
             this.syncTopbarStatus();
+            this.startWakeWordListener();
         }
     }
 
@@ -392,11 +795,30 @@ class JARVISInterface {
         this.faceVisualizer.setActive(false);
         this.stopAudioLevelLoop();
         this.syncTopbarStatus();
+        this.stopDurationTimer();
+        this.stopBackgroundMusic();
+        this.startWakeWordListener();
     }
 
     // Lê o volume real de entrada/saída da conversa (dados de frequência do próprio SDK da
     // ElevenLabs) a cada quadro e alimenta o rosto animado — é o que faz ele reagir à fala de
     // verdade, tanto a sua quanto a do Jarvis.
+    // Média 0..1 de um array de frequência do SDK — usada tanto pro visualizador 3D quanto pro
+    // medidor de volume (VU-meter) real do painel lateral.
+    averageLevel(getData) {
+        try {
+            const data = getData();
+            if (!data || !data.length) return 0;
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) sum += data[i];
+            return sum / data.length / 255;
+        } catch (error) {
+            // Método pode não estar disponível dependendo do estado da sessão — ignora e tenta
+            // de novo no próximo quadro.
+            return 0;
+        }
+    }
+
     startAudioLevelLoop() {
         if (this.audioLevelLoopId) return;
         const step = () => {
@@ -404,19 +826,20 @@ class JARVISInterface {
                 this.audioLevelLoopId = null;
                 return;
             }
-            try {
-                const data = this.currentMode === 'speaking'
-                    ? this.conversation.getOutputByteFrequencyData()
-                    : this.conversation.getInputByteFrequencyData();
-                if (data && data.length) {
-                    let sum = 0;
-                    for (let i = 0; i < data.length; i++) sum += data[i];
-                    this.faceVisualizer.setLevel(sum / data.length / 255);
-                }
-            } catch (error) {
-                // Método pode não estar disponível dependendo do estado da sessão — ignora e tenta
-                // de novo no próximo quadro.
-            }
+
+            // Pro visualizador 3D (orbe/rosto/anel): usa o canal relevante ao modo atual
+            const combinedLevel = this.currentMode === 'speaking'
+                ? this.averageLevel(() => this.conversation.getOutputByteFrequencyData())
+                : this.averageLevel(() => this.conversation.getInputByteFrequencyData());
+            this.faceVisualizer.setLevel(combinedLevel);
+
+            // Pro VU-meter: os dois canais lidos sempre, independente do modo — o que não está
+            // ativo naturalmente fica perto de zero, que é o comportamento certo de um medidor real
+            const inputLevel = this.averageLevel(() => this.conversation.getInputByteFrequencyData());
+            const outputLevel = this.averageLevel(() => this.conversation.getOutputByteFrequencyData());
+            if (this.vuInput) this.vuInput.style.width = `${Math.min(100, inputLevel * 130)}%`;
+            if (this.vuOutput) this.vuOutput.style.width = `${Math.min(100, outputLevel * 130)}%`;
+
             this.audioLevelLoopId = requestAnimationFrame(step);
         };
         this.audioLevelLoopId = requestAnimationFrame(step);
@@ -427,6 +850,8 @@ class JARVISInterface {
             cancelAnimationFrame(this.audioLevelLoopId);
             this.audioLevelLoopId = null;
         }
+        if (this.vuInput) this.vuInput.style.width = '0%';
+        if (this.vuOutput) this.vuOutput.style.width = '0%';
         this.faceVisualizer.setLevel(0);
     }
 
@@ -550,12 +975,9 @@ class JARVISInterface {
     initializeHUDAnimations() {
         // Animate loading bars
         this.animateLoadingBars();
-        
+
         // Animate chart bars
         this.animateChartBars();
-        
-        // Animate data displays
-        this.animateDataDisplays();
     }
 
     startDynamicUpdates() {
@@ -598,19 +1020,6 @@ class JARVISInterface {
         });
     }
 
-    animateDataDisplays() {
-        const circles = document.querySelectorAll('.display-circle .circle-label');
-        const labels = ['DY', '53', 'PH', 'KL'];
-        
-        setInterval(() => {
-            circles.forEach((circle, index) => {
-                if (Math.random() > 0.7) {
-                    circle.textContent = Math.floor(Math.random() * 100).toString();
-                }
-            });
-        }, 3000);
-    }
-
     updateLoadingProgress() {
         const progressBars = document.querySelectorAll('.loading-progress');
         progressBars.forEach(bar => {
@@ -630,6 +1039,33 @@ class JARVISInterface {
             bar.style.height = newHeight + '%';
             labels[index].textContent = newHeight;
         });
+    }
+
+    updateStatMessages() {
+        if (this.statMessages) this.statMessages.textContent = String(this.messageCount);
+    }
+
+    startDurationTimer() {
+        this.stopDurationTimer();
+        this.updateStatDuration();
+        this.durationTimerId = setInterval(() => this.updateStatDuration(), 1000);
+    }
+
+    stopDurationTimer() {
+        if (this.durationTimerId) {
+            clearInterval(this.durationTimerId);
+            this.durationTimerId = null;
+        }
+        if (this.statDuration) this.statDuration.textContent = '0:00';
+        if (this.statLatency) this.statLatency.textContent = '--';
+    }
+
+    updateStatDuration() {
+        if (!this.statDuration || !this.conversationStartedAt) return;
+        const elapsedSec = Math.floor((Date.now() - this.conversationStartedAt) / 1000);
+        const minutes = Math.floor(elapsedSec / 60);
+        const seconds = String(elapsedSec % 60).padStart(2, '0');
+        this.statDuration.textContent = `${minutes}:${seconds}`;
     }
 
     // Adiciona uma linha real ao painel de log lateral (nada de dados simulados — cada chamada vem

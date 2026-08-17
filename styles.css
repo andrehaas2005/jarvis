@@ -193,8 +193,8 @@ body {
 
 .earth-hologram {
     position: relative;
-    width: 220px;
-    height: 220px;
+    width: 160px;
+    height: 160px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -210,7 +210,7 @@ body {
 .status-display {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 6px;
     width: 100%;
 }
 
@@ -218,7 +218,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 12px;
+    padding: 5px 12px;
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 5px;
@@ -341,8 +341,8 @@ body {
 /* Hologram Container */
 .hologram-container {
     position: relative;
-    width: 300px;
-    height: 400px;
+    width: 340px;
+    height: 420px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -376,6 +376,32 @@ body {
 .visualizer-mode-toggle:hover {
     background: rgba(0, 212, 255, 0.2);
     box-shadow: 0 0 10px var(--hud-blue);
+}
+
+/* Relógio central do modo "ANEL" */
+.ring-clock {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Orbitron', monospace;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #7ffcec;
+    text-shadow: 0 0 12px #33fbe0, 0 0 24px rgba(51, 251, 224, 0.5);
+    pointer-events: none;
+}
+
+.ring-clock-sub {
+    font-size: 0.5rem;
+    line-height: 1.3;
+    letter-spacing: 1px;
+    color: #7ffcec;
+    opacity: 0.85;
 }
 
 /* Preview da câmera (visão) */
@@ -492,6 +518,91 @@ body {
     background: rgba(0, 255, 136, 0.12);
     border-color: #00ff88;
     color: #00ff88;
+}
+
+.topbar-wake {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 212, 255, 0.06);
+    border: 1px solid var(--hud-blue);
+    color: var(--hud-blue);
+    font-family: 'Orbitron', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 1px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.topbar-wake:hover {
+    background: rgba(0, 212, 255, 0.2);
+    box-shadow: 0 0 10px var(--hud-blue);
+}
+
+/* Ouvindo a frase de ativação — pulso sutil pra diferenciar de "vision/gestos ativos" (verde) */
+.topbar-wake.active {
+    background: rgba(0, 212, 255, 0.14);
+    border-color: var(--hud-cyan);
+    color: var(--hud-cyan);
+    animation: wakeListeningPulse 2.2s ease-in-out infinite;
+}
+
+@keyframes wakeListeningPulse {
+    0%, 100% { box-shadow: 0 0 4px rgba(0, 212, 255, 0.3); }
+    50% { box-shadow: 0 0 12px rgba(0, 212, 255, 0.7); }
+}
+
+.topbar-music {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 212, 255, 0.06);
+    border: 1px solid var(--hud-blue);
+    color: var(--hud-blue);
+    font-family: 'Orbitron', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 1px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.topbar-music:hover {
+    background: rgba(0, 212, 255, 0.2);
+    box-shadow: 0 0 10px var(--hud-blue);
+}
+
+.topbar-music.active {
+    background: rgba(0, 255, 136, 0.12);
+    border-color: #00ff88;
+    color: #00ff88;
+}
+
+.topbar-music.muted {
+    opacity: 0.45;
+}
+
+.topbar-music-swap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 212, 255, 0.06);
+    border: 1px solid var(--hud-blue);
+    color: var(--hud-blue);
+    font-size: 0.75rem;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.topbar-music-swap:hover {
+    background: rgba(0, 212, 255, 0.2);
+    box-shadow: 0 0 10px var(--hud-blue);
 }
 
 /* ============================= Canvas de gestos ============================= */
@@ -823,7 +934,6 @@ body {
     flex-direction: column;
     align-items: center;
     gap: 15px;
-    margin-bottom: 90px;
 }
 
 .voice-button {
@@ -887,10 +997,8 @@ body {
 }
 
 .chat-messages {
-    position: absolute;
-    bottom: 60px;
-    left: 20px;
-    right: 20px;
+    align-self: stretch;
+    margin: -14px 20px 0; /* o gap de 30px do .center já dá espaço; isso deixa líquido uns 16px */
     max-height: 120px;
     overflow-y: auto;
     scrollbar-width: thin;
@@ -1091,7 +1199,21 @@ body {
     flex-shrink: 0;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 12px 10px;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.stat-caption {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.5rem;
+    letter-spacing: 1px;
+    color: var(--hud-text-dim);
 }
 
 .display-circle {
@@ -1106,51 +1228,55 @@ body {
     animation: circlePulse 3s ease-in-out infinite;
 }
 
-.display-circle:nth-child(1) { animation-delay: 0s; }
-.display-circle:nth-child(2) { animation-delay: 0.5s; }
-.display-circle:nth-child(3) { animation-delay: 1s; }
-.display-circle:nth-child(4) { animation-delay: 1.5s; }
+.stat-item:nth-child(1) .display-circle { animation-delay: 0s; }
+.stat-item:nth-child(2) .display-circle { animation-delay: 0.5s; }
+.stat-item:nth-child(3) .display-circle { animation-delay: 1s; }
+.stat-item:nth-child(4) .display-circle { animation-delay: 1.5s; }
 
 .circle-label {
-    font-size: 0.8rem;
+    font-size: 0.65rem;
     color: var(--hud-text);
     font-weight: 700;
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
 }
 
+/* Medidor de volume real (VU-meter) — reage ao áudio de verdade, ver startAudioLevelLoop() */
 .wave-displays {
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
 
-.wave-container {
+.vu-meter {
     display: flex;
     align-items: center;
-    gap: 5px;
-    height: 20px;
+    gap: 8px;
 }
 
-.wave {
-    width: 3px;
-    background: var(--hud-blue);
-    border-radius: 2px;
-    animation: waveAnimation 1.5s ease-in-out infinite;
+.vu-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 1px;
+    color: var(--hud-text-dim);
+    width: 42px;
+    flex-shrink: 0;
 }
 
-.wave-1 {
+.vu-bar {
+    flex: 1;
     height: 8px;
-    animation-delay: 0s;
+    border: 1px solid rgba(0, 212, 255, 0.4);
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(0, 212, 255, 0.05);
 }
 
-.wave-2 {
-    height: 12px;
-    animation-delay: 0.2s;
-}
-
-.wave-3 {
-    height: 6px;
-    animation-delay: 0.4s;
+.vu-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--hud-blue), var(--hud-cyan));
+    border-radius: 4px;
+    transition: width 0.08s ease-out;
 }
 
 /* Voice Indicator */
@@ -1271,17 +1397,6 @@ body {
     50% { 
         border-color: var(--hud-cyan);
         box-shadow: 0 0 20px var(--hud-cyan);
-    }
-}
-
-@keyframes waveAnimation {
-    0%, 100% { 
-        height: 6px;
-        opacity: 0.6;
-    }
-    50% { 
-        height: 12px;
-        opacity: 1;
     }
 }
 
