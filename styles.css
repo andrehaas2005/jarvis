@@ -1097,13 +1097,14 @@ body {
     grid-area: right-side;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 8px;
+    padding: 16px;
     overflow-y: auto;
 }
 
 .data-log {
     flex: 1;
-    min-height: 90px;
+    min-height: 68px;
     background: rgba(0, 212, 255, 0.05);
     border: 1px solid var(--hud-blue);
     border-radius: 5px;
@@ -1132,7 +1133,7 @@ body {
     border: 1px solid var(--hud-blue);
     border-radius: 5px;
     padding: 10px 15px;
-    max-height: 90px;
+    max-height: 70px;
     overflow-y: auto;
 }
 
@@ -1244,7 +1245,7 @@ body {
 .wave-displays {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 6px;
 }
 
 .vu-meter {
@@ -1258,7 +1259,7 @@ body {
     font-size: 0.55rem;
     letter-spacing: 1px;
     color: var(--hud-text-dim);
-    width: 42px;
+    width: 46px;
     flex-shrink: 0;
 }
 
@@ -1277,6 +1278,68 @@ body {
     background: linear-gradient(90deg, var(--hud-blue), var(--hud-cyan));
     border-radius: 4px;
     transition: width 0.08s ease-out;
+}
+
+/* Cor diferente pra distinguir o VU-meter da música dos de voz (VOCÊ/JARVIS) */
+.vu-bar-fill-music {
+    background: linear-gradient(90deg, #a855f7, #e879f9);
+}
+
+.music-volume {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.music-volume-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 1px;
+    color: var(--hud-text-dim);
+    width: 46px;
+    flex-shrink: 0;
+}
+
+.music-volume-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.55rem;
+    color: var(--hud-text-dim);
+    width: 30px;
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.music-volume-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(168, 85, 247, 0.2);
+    outline: none;
+    cursor: pointer;
+}
+
+.music-volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #e879f9;
+    box-shadow: 0 0 6px rgba(232, 121, 249, 0.8);
+    cursor: pointer;
+}
+
+.music-volume-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border: none;
+    border-radius: 50%;
+    background: #e879f9;
+    box-shadow: 0 0 6px rgba(232, 121, 249, 0.8);
+    cursor: pointer;
 }
 
 /* Voice Indicator */

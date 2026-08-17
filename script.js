@@ -90,6 +90,16 @@ class JARVISInterface {
         this.musicEnabled = localStorage.getItem('jarvis-music-enabled') !== 'false'; // ligada por padrão
         this.customMusicObjectUrl = null; // faixa trocada pelo botão 📁 — só dura a sessão atual
         this.musicFileMissing = false; // evita spam de aviso se o mp3 não existir
+        this.vuMusic = document.getElementById('vuMusic');
+        this.musicVolumeSlider = document.getElementById('musicVolumeSlider');
+        this.musicVolumeValue = document.getElementById('musicVolumeValue');
+        // Multiplicador (0..1) sobre o BACKGROUND_MUSIC_VOLUME base (25%) — controlado pelo
+        // slider "VOL. MÚSICA". Salvo entre sessões.
+        const savedVolume = parseInt(localStorage.getItem('jarvis-music-volume'), 10);
+        this.musicVolumeMultiplier = Number.isFinite(savedVolume) ? savedVolume / 100 : 1;
+        this.musicAudioContext = null; // Web Audio API — só pro VU-meter da música
+        this.musicAnalyser = null;
+        this.musicAnalyserData = null;
 
         // Rotina do primeiro contato do dia (clima + previsão de chuva + agenda) — injetada via
         // dynamicVariables do SDK da ElevenLabs, referenciada como {{daily_briefing}} na primeira
@@ -159,6 +169,34 @@ class JARVISInterface {
                 if (this.musicEnabled && this.conversationActive) this.playBackgroundMusic();
             });
         }
+
+        // Slider de volume — ajusta um multiplicador sobre os 25% base (BACKGROUND_MUSIC_VOLUME).
+        // Aplica na hora, mesmo com a música já tocando (sem esperar a próxima conversa).
+        if (this.musicVolumeSlider) {
+            this.musicVolumeSlider.value = String(Math.round(this.musicVolumeMultiplier * 100));
+            this.updateMusicVolumeLabel();
+            this.musicVolumeSlider.addEventListener('input', () => {
+                const percent = Number(this.musicVolumeSlider.value);
+                this.musicVolumeMultiplier = percent / 100;
+                localStorage.setItem('jarvis-music-volume', String(percent));
+                this.updateMusicVolumeLabel();
+                if (this.bgMusic && !this.bgMusic.paused) {
+                    this.bgMusic.volume = this.targetMusicVolume();
+                }
+            });
+        }
+    }
+
+    updateMusicVolumeLabel() {
+        if (this.musicVolumeValue) {
+            this.musicVolumeValue.textContent = `${Math.round(this.musicVolumeMultiplier * 100)}%`;
+        }
+    }
+
+    // Volume real de reprodução = 25% (base, pra ficar sempre bem abaixo da voz do Jarvis) × o
+    // multiplicador do slider (0 a 100%).
+    targetMusicVolume() {
+        return BACKGROUND_MUSIC_VOLUME * this.musicVolumeMultiplier;
     }
 
     syncMusicButton() {
@@ -166,11 +204,35 @@ class JARVISInterface {
         this.topbarMusic.classList.toggle('muted', !this.musicEnabled);
     }
 
-    // Toca a música de fundo com um fade-in suave até 25% do volume máximo. Não faz nada se a
-    // música estiver desligada no botão, ou se não houver arquivo configurado/carregado.
+    // Liga o Web Audio API só pra alimentar o VU-meter da música (getByteFrequencyData) — o
+    // elemento <audio> continua tocando normalmente, o analyser só "escuta" o mesmo sinal.
+    // Precisa ser criado depois de um gesto do usuário (autoplay policy), então é chamado de
+    // dentro de playBackgroundMusic() na primeira vez que a música toca.
+    ensureMusicAnalyser() {
+        if (this.musicAnalyser || !this.bgMusic) return;
+        try {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            this.musicAudioContext = new AudioContextClass();
+            const source = this.musicAudioContext.createMediaElementSource(this.bgMusic);
+            this.musicAnalyser = this.musicAudioContext.createAnalyser();
+            this.musicAnalyser.fftSize = 256;
+            this.musicAnalyserData = new Uint8Array(this.musicAnalyser.frequencyBinCount);
+            // O analyser só "escuta" o sinal — precisa continuar até o destination, senão a
+            // música fica muda (createMediaElementSource desvia o áudio do output padrão).
+            source.connect(this.musicAnalyser);
+            this.musicAnalyser.connect(this.musicAudioContext.destination);
+        } catch (error) {
+            console.warn('VU-meter da música indisponível:', error.message);
+        }
+    }
+
+    // Toca a música de fundo com um fade-in suave até o volume alvo (25% × slider). Não faz nada
+    // se a música estiver desligada no botão, ou se não houver arquivo configurado/carregado.
     playBackgroundMusic() {
         if (!this.bgMusic || !this.musicEnabled || this.musicFileMissing) return;
         if (!this.bgMusic.src) return;
+        this.ensureMusicAnalyser();
+        if (this.musicAudioContext?.state === 'suspended') this.musicAudioContext.resume();
         this.bgMusic.currentTime = 0;
         this.bgMusic.volume = 0;
         this.bgMusic.play().catch((error) => {
@@ -178,7 +240,7 @@ class JARVISInterface {
         });
         const fadeStep = () => {
             if (!this.bgMusic || this.bgMusic.paused) return;
-            const target = BACKGROUND_MUSIC_VOLUME;
+            const target = this.targetMusicVolume();
             if (this.bgMusic.volume < target) {
                 this.bgMusic.volume = Math.min(target, this.bgMusic.volume + 0.02);
                 requestAnimationFrame(fadeStep);
@@ -201,6 +263,7 @@ class JARVISInterface {
             }
         };
         requestAnimationFrame(fadeStep);
+        if (this.vuMusic) this.vuMusic.style.width = '0%';
     }
 
     // ------------------------------------------------------------------
@@ -839,6 +902,17 @@ class JARVISInterface {
             const outputLevel = this.averageLevel(() => this.conversation.getOutputByteFrequencyData());
             if (this.vuInput) this.vuInput.style.width = `${Math.min(100, inputLevel * 130)}%`;
             if (this.vuOutput) this.vuOutput.style.width = `${Math.min(100, outputLevel * 130)}%`;
+
+            // VU-meter da música — lê o mesmo sinal real que está tocando (ver ensureMusicAnalyser)
+            if (this.vuMusic && this.musicAnalyser && !this.bgMusic.paused) {
+                const musicLevel = this.averageLevel(() => {
+                    this.musicAnalyser.getByteFrequencyData(this.musicAnalyserData);
+                    return this.musicAnalyserData;
+                });
+                this.vuMusic.style.width = `${Math.min(100, musicLevel * 160)}%`;
+            } else if (this.vuMusic) {
+                this.vuMusic.style.width = '0%';
+            }
 
             this.audioLevelLoopId = requestAnimationFrame(step);
         };

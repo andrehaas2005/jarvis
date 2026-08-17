@@ -241,6 +241,18 @@
                     <span class="vu-label">JARVIS</span>
                     <div class="vu-bar"><div class="vu-bar-fill" id="vuOutput"></div></div>
                 </div>
+                <div class="vu-meter">
+                    <span class="vu-label">MÚSICA</span>
+                    <div class="vu-bar"><div class="vu-bar-fill vu-bar-fill-music" id="vuMusic"></div></div>
+                </div>
+            </div>
+
+            <!-- Volume da música de fundo (relativo aos 25% base — ver BACKGROUND_MUSIC_VOLUME em
+                 script.js). Ajuste é salvo e aplicado na hora, mesmo com a música já tocando. -->
+            <div class="music-volume">
+                <span class="music-volume-label">VOLUME</span>
+                <input type="range" id="musicVolumeSlider" min="0" max="100" value="100" class="music-volume-slider">
+                <span class="music-volume-value" id="musicVolumeValue">100%</span>
             </div>
         </div>
 
