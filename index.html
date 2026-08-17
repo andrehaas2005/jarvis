@@ -137,14 +137,6 @@
                      visualizer3d.js. Só aparece nesse modo. -->
                 <div id="ringClock" class="ring-clock" style="display: none;"></div>
 
-                <!-- Visão por câmera: só aparece depois de "SHARE VISION" na barra superior.
-                     "OLHAR AGORA" manda o frame atual pro Jarvis analisar de verdade (ver
-                     lookAtCamera() em script.js) — não é automático, é uma ação explícita. -->
-                <div class="vision-preview" id="visionPreview" hidden>
-                    <span class="vision-preview-label">OPTICAL FEED</span>
-                    <video id="visionVideo" autoplay muted playsinline></video>
-                    <button id="visionLookBtn" class="vision-look-btn" disabled>OLHAR AGORA</button>
-                </div>
                 <canvas id="visionCaptureCanvas" hidden></canvas>
             </div>
             
@@ -269,6 +261,18 @@
         <div class="voice-indicator" id="voiceIndicator">
             <div class="voice-wave"></div>
             <span>ESCUTANDO...</span>
+        </div>
+
+        <!-- Visão por câmera: só aparece depois de "SHARE VISION" na barra superior. "OLHAR AGORA"
+             manda o frame atual pro Jarvis analisar de verdade (ver lookAtCamera() em script.js) —
+             não é automático, é uma ação explícita. Fica como filho direto de .hud-container (fora
+             de qualquer .hud-panel) de propósito: painéis usam backdrop-filter, que quebra
+             `position: fixed` dos filhos (o navegador passa a tratar "fixed" como relativo ao
+             painel, não à tela) — o que impedia o arrasto livre de funcionar direito. -->
+        <div class="vision-preview" id="visionPreview" hidden>
+            <span class="vision-preview-label">OPTICAL FEED</span>
+            <video id="visionVideo" autoplay muted playsinline></video>
+            <button id="visionLookBtn" class="vision-look-btn" disabled>OLHAR AGORA</button>
         </div>
     </div>
 

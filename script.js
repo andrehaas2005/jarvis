@@ -132,6 +132,128 @@ class JARVISInterface {
 
         this.setupBackgroundMusic();
         this.setupWakeWordListener();
+        this.setupVisionPreviewDrag();
+    }
+
+    // ------------------------------------------------------------------
+    // "OPTICAL FEED" arrastável — segura pela label e solta em qualquer lugar da tela; se soltar
+    // sobre o quadro inferior esquerdo (.left-side), fixa numa posição pré-definida ali (dock).
+    // Posição fica salva entre sessões.
+    // ------------------------------------------------------------------
+
+    setupVisionPreviewDrag() {
+        if (!this.visionPreview) return;
+        const handle = this.visionPreview.querySelector('.vision-preview-label');
+        const dockZone = document.querySelector('.hud-panel.left-side');
+        if (!handle) return;
+
+        // Onde o box se fixa dentro do quadro inferior esquerdo, ao ser solto ali — ajuste aqui
+        // se quiser noutro canto.
+        const DOCK_MARGIN_RIGHT = 12;
+        const DOCK_MARGIN_TOP = 12;
+
+        const applyDockedPosition = () => {
+            if (!dockZone) return;
+            const zoneRect = dockZone.getBoundingClientRect();
+            const left = zoneRect.right - this.visionPreview.offsetWidth - DOCK_MARGIN_RIGHT;
+            const top = zoneRect.top + DOCK_MARGIN_TOP;
+            this.visionPreview.style.left = `${left}px`;
+            this.visionPreview.style.top = `${top}px`;
+        };
+
+        const saved = JSON.parse(localStorage.getItem('jarvis-vision-preview-pos') || 'null');
+        if (saved?.docked) {
+            this.visionPreview.classList.add('docked');
+            // Recalcula contra o quadro atual (a tela pode ter outro tamanho desde a última vez)
+            requestAnimationFrame(applyDockedPosition);
+        } else if (saved) {
+            this.visionPreview.style.left = `${saved.left}px`;
+            this.visionPreview.style.top = `${saved.top}px`;
+        } else {
+            // Sem preferência salva: cai no mesmo lugar visual de antes (canto superior esquerdo
+            // do visualizador central), calculado uma vez no carregamento.
+            const centerPanel = document.querySelector('.hud-panel.center');
+            if (centerPanel) {
+                const rect = centerPanel.getBoundingClientRect();
+                this.visionPreview.style.left = `${rect.left + 6}px`;
+                this.visionPreview.style.top = `${rect.top + 6}px`;
+            }
+        }
+
+        let dragging = false;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        const isOverDockZone = (clientX, clientY) => {
+            if (!dockZone) return false;
+            const zoneRect = dockZone.getBoundingClientRect();
+            return clientX >= zoneRect.left && clientX <= zoneRect.right
+                && clientY >= zoneRect.top && clientY <= zoneRect.bottom;
+        };
+
+        const onPointerMove = (event) => {
+            if (!dragging) return;
+            const maxLeft = window.innerWidth - this.visionPreview.offsetWidth;
+            const maxTop = window.innerHeight - this.visionPreview.offsetHeight;
+            const left = Math.max(0, Math.min(maxLeft, event.clientX - offsetX));
+            const top = Math.max(0, Math.min(maxTop, event.clientY - offsetY));
+            this.visionPreview.style.left = `${left}px`;
+            this.visionPreview.style.top = `${top}px`;
+
+            if (dockZone) {
+                dockZone.classList.toggle('drop-target-active', isOverDockZone(event.clientX, event.clientY));
+            }
+        };
+
+        const onPointerUp = (event) => {
+            if (!dragging) return;
+            dragging = false;
+            this.visionPreview.classList.remove('dragging');
+            document.removeEventListener('pointermove', onPointerMove);
+            document.removeEventListener('pointerup', onPointerUp);
+
+            const docked = isOverDockZone(event.clientX, event.clientY);
+            if (dockZone) dockZone.classList.remove('drop-target-active');
+
+            this.visionPreview.classList.toggle('docked', docked);
+            if (docked) {
+                applyDockedPosition();
+                this.pushLog('[VISÃO] OPTICAL FEED fixado no quadro');
+            }
+
+            localStorage.setItem('jarvis-vision-preview-pos', JSON.stringify({
+                left: parseFloat(this.visionPreview.style.left),
+                top: parseFloat(this.visionPreview.style.top),
+                docked,
+            }));
+        };
+
+        handle.addEventListener('pointerdown', (event) => {
+            dragging = true;
+            const rect = this.visionPreview.getBoundingClientRect();
+            offsetX = event.clientX - rect.left;
+            offsetY = event.clientY - rect.top;
+            this.visionPreview.classList.add('dragging');
+            document.addEventListener('pointermove', onPointerMove);
+            document.addEventListener('pointerup', onPointerUp);
+            event.preventDefault();
+        });
+
+        // Se a janela for redimensionada (maximizar/restaurar, trocar de monitor), reancora: preso
+        // no quadro continua preso (o quadro pode ter mudado de lugar), e solto livre só é mantido
+        // dentro da tela (evita ficar preso fora da área visível).
+        window.addEventListener('resize', () => {
+            if (this.visionPreview.classList.contains('docked')) {
+                applyDockedPosition();
+                return;
+            }
+            const maxLeft = Math.max(0, window.innerWidth - this.visionPreview.offsetWidth);
+            const maxTop = Math.max(0, window.innerHeight - this.visionPreview.offsetHeight);
+            const left = Math.min(maxLeft, parseFloat(this.visionPreview.style.left) || 0);
+            const top = Math.min(maxTop, parseFloat(this.visionPreview.style.top) || 0);
+            this.visionPreview.style.left = `${left}px`;
+            this.visionPreview.style.top = `${top}px`;
+        });
     }
 
     // ------------------------------------------------------------------
@@ -376,15 +498,40 @@ class JARVISInterface {
         const recognizer = new SpeechRecognition();
         recognizer.lang = 'pt-BR';
         recognizer.continuous = true;
-        recognizer.interimResults = false;
+        // interimResults ligado: o Chrome costuma "fechar" (isFinal) um resultado no meio da frase
+        // quando você faz uma pausa natural depois da vírgula — ex.: "Jarvis," [pausa] "ativar"
+        // vira DOIS resultados finais separados, e nenhum deles sozinho batia com a frase completa.
+        // Por isso mantemos um buffer contínuo (finais + o interino mais recente) e comparamos a
+        // frase contra esse buffer inteiro, não só contra o último resultado.
+        recognizer.interimResults = true;
+        this.wakeTranscriptBuffer = '';
 
         recognizer.onresult = (event) => {
-            const lastResult = event.results[event.results.length - 1];
-            if (!lastResult || !lastResult.isFinal) return;
-            const heard = JARVISInterface.normalizeSpeech(lastResult[0].transcript);
-            const matched = WAKE_PHRASES.some((phrase) => heard.includes(JARVISInterface.normalizeSpeech(phrase)));
-            if (matched) {
-                this.pushLog(`[VOZ] Frase de ativação reconhecida: "${lastResult[0].transcript.trim()}"`);
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const result = event.results[i];
+                if (result.isFinal) {
+                    this.wakeTranscriptBuffer += ` ${result[0].transcript}`;
+                    // Buffer não cresce pra sempre — só precisamos do suficiente pra caber a
+                    // maior frase configurada, com folga.
+                    if (this.wakeTranscriptBuffer.length > 200) {
+                        this.wakeTranscriptBuffer = this.wakeTranscriptBuffer.slice(-200);
+                    }
+                }
+            }
+
+            // Texto interino do resultado ainda não fechado (se houver) — dá pra casar a frase
+            // mesmo antes do Chrome "fechar" esse trecho como final.
+            const interim = Array.from(event.results)
+                .filter((result) => !result.isFinal)
+                .map((result) => result[0].transcript)
+                .join(' ');
+
+            const rawHeard = `${this.wakeTranscriptBuffer} ${interim}`;
+            const heard = JARVISInterface.normalizeSpeech(rawHeard);
+            const matchedPhrase = WAKE_PHRASES.find((phrase) => heard.includes(JARVISInterface.normalizeSpeech(phrase)));
+            if (matchedPhrase) {
+                this.pushLog(`[VOZ] Frase de ativação reconhecida: "${matchedPhrase}"`);
+                this.wakeTranscriptBuffer = '';
                 this.stopWakeWordListener();
                 this.startConversation();
             }

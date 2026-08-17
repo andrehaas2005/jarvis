@@ -405,11 +405,15 @@ body {
 }
 
 /* Preview da câmera (visão) */
+/* position: fixed (não mais absolute dentro do painel central) — assim dá pra arrastar o box por
+   cima de qualquer painel da tela, não só dentro do visualizador central. Posição inicial é
+   calculada em runtime por setupVisionPreviewDrag() (script.js), pra cair no mesmo lugar de
+   antes por padrão; depois disso, sua posição arrastada fica salva entre sessões. */
 .vision-preview {
-    position: absolute;
-    top: 6px;
-    left: 6px;
-    z-index: 11;
+    position: fixed;
+    top: 90px;
+    left: 26px;
+    z-index: 30;
     width: 140px;
     background: rgba(0, 10, 18, 0.85);
     border: 1px solid var(--hud-blue);
@@ -424,11 +428,32 @@ body {
     display: none;
 }
 
+/* Enquanto sendo arrastado — feedback visual, sem transição de posição pra não "atrasar" o mouse */
+.vision-preview.dragging {
+    box-shadow: 0 0 18px var(--hud-cyan);
+    opacity: 0.9;
+    cursor: grabbing;
+}
+
+/* Já se fixou no quadro inferior esquerdo (dock) — borda ciano fixa pra indicar o estado */
+.vision-preview.docked {
+    border-color: var(--hud-cyan);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.35);
+}
+
 .vision-preview-label {
     font-family: 'Orbitron', monospace;
     font-size: 0.55rem;
     letter-spacing: 1px;
     color: var(--hud-blue);
+    cursor: grab;
+    user-select: none;
+}
+
+/* O quadro inferior esquerdo vira "zona de encaixe" — destaca quando o OPTICAL FEED está sendo
+   arrastado por cima dele, indicando que soltar aqui vai fixá-lo numa posição pré-definida. */
+.hud-panel.left-side.drop-target-active {
+    box-shadow: inset 0 0 0 2px var(--hud-cyan), 0 0 24px rgba(0, 255, 255, 0.35);
 }
 
 .vision-preview video {
