@@ -20,9 +20,16 @@
                 <span class="topbar-brand-sub">HUD SYSTEM</span>
             </div>
             <div class="topbar-actions">
-                <button class="topbar-wake" id="topbarWake" title="Ativação por voz: diga 'Jarvis, ativar' (ou outra frase) para iniciar a conversa sem clicar">
-                    <span class="topbar-wake-icon">&#127908;</span> ATIVAÇÃO POR VOZ
-                </button>
+                <div class="wake-phrases-wrapper">
+                    <button class="topbar-wake" id="topbarWake" title="Ativação por voz: diga 'Jarvis, ativar' (ou outra frase) para iniciar a conversa sem clicar">
+                        <span class="topbar-wake-icon">&#127908;</span> ATIVAÇÃO POR VOZ
+                    </button>
+                    <button class="topbar-wake-info" id="topbarWakeInfo" title="Ver as frases de ativação">&#9432;</button>
+                    <div class="wake-phrases-popover" id="wakePhrasesPopover" hidden>
+                        <div class="wake-phrases-title">FRASES DE ATIVAÇÃO</div>
+                        <ul class="wake-phrases-list" id="wakePhrasesList"></ul>
+                    </div>
+                </div>
                 <button class="topbar-music" id="topbarMusic" title="Música de fundo durante a conversa (clique para ligar/desligar)">
                     <span class="topbar-music-icon">&#127925;</span> MÚSICA
                 </button>

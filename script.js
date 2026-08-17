@@ -15,17 +15,16 @@ const BACKGROUND_MUSIC_SRC = 'assets/music/background.mp3';
 const BACKGROUND_MUSIC_DEFAULT_VOLUME = 0.1;
 
 // Frases de ativação por voz — diga qualquer uma delas com o microfone liberado (fora de uma
-// conversa) que o Jarvis inicia a conversa sozinho, sem precisar clicar em "Sistema Ativo".
+// conversa) que o Jarvis inicia a conversa sozinho, sem precisar clicar em "Sistema Ativo". Fonte
+// única: usada tanto pro reconhecimento (comparada via normalizeSpeech — acento/maiúscula/pontuação
+// não importam na hora de falar) quanto pra lista exibida no HUD (ver renderWakePhrasesList()).
 const WAKE_PHRASES = [
-    'jarvis ativar',
-    'e ai jarvis',
-    'e aí jarvis',
-    'jarvis esta me ouvindo',
-    'jarvis está me ouvindo',
-    'jarvis podemos conversar',
-    'jarvis vamos conversar',
-    'jarvis voce esta pronto',
-    'jarvis você está pronto',
+    'Jarvis, ativar',
+    'E aí, Jarvis',
+    'Jarvis, está me ouvindo?',
+    'Jarvis, podemos conversar?',
+    'Jarvis, vamos conversar?',
+    'Jarvis, você está pronto?',
 ];
 
 class JARVISInterface {
@@ -81,6 +80,9 @@ class JARVISInterface {
         // pausado durante a conversa e com o canvas de gestos aberto (os dois usam o mesmo
         // SpeechRecognition do navegador, que só roda uma instância por vez).
         this.topbarWake = document.getElementById('topbarWake');
+        this.topbarWakeInfo = document.getElementById('topbarWakeInfo');
+        this.wakePhrasesPopover = document.getElementById('wakePhrasesPopover');
+        this.wakePhrasesList = document.getElementById('wakePhrasesList');
         this.wakeRecognizer = null;
         this.wakeListening = false; // reflete se o reconhecimento está de fato rodando agora
         this.wakeEnabled = true; // liga/desliga a funcionalidade (botão da topbar)
@@ -312,7 +314,29 @@ class JARVISInterface {
             .trim();
     }
 
+    // Popover com a lista de frases (WAKE_PHRASES é a fonte única — nunca fica desatualizada).
+    // Funciona independente de o navegador suportar ativação por voz, já que é só informativo.
+    setupWakePhrasesPopover() {
+        if (this.wakePhrasesList) {
+            this.wakePhrasesList.innerHTML = WAKE_PHRASES
+                .map((phrase) => `<li>"${this.escapeHtml(phrase)}"</li>`)
+                .join('');
+        }
+        if (!this.topbarWakeInfo || !this.wakePhrasesPopover) return;
+        this.topbarWakeInfo.addEventListener('click', (event) => {
+            event.stopPropagation();
+            this.wakePhrasesPopover.hidden = !this.wakePhrasesPopover.hidden;
+        });
+        document.addEventListener('click', (event) => {
+            if (this.wakePhrasesPopover.hidden) return;
+            if (this.wakePhrasesPopover.contains(event.target)) return;
+            this.wakePhrasesPopover.hidden = true;
+        });
+    }
+
     setupWakeWordListener() {
+        this.setupWakePhrasesPopover();
+
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             console.warn('SpeechRecognition não suportado neste navegador — ativação por voz desativada.');
