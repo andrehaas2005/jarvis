@@ -1310,6 +1310,34 @@ body {
     text-align: right;
 }
 
+.music-mute-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    border-radius: 50%;
+    color: #e879f9;
+    font-size: 0.65rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.music-mute-btn:hover {
+    background: rgba(168, 85, 247, 0.15);
+    box-shadow: 0 0 8px rgba(232, 121, 249, 0.6);
+}
+
+.music-mute-btn.muted {
+    background: rgba(255, 80, 80, 0.12);
+    border-color: rgba(255, 80, 80, 0.6);
+    color: #ff5050;
+}
+
 .music-volume-slider {
     flex: 1;
     -webkit-appearance: none;

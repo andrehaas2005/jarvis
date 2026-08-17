@@ -247,12 +247,14 @@
                 </div>
             </div>
 
-            <!-- Volume da música de fundo (relativo aos 25% base — ver BACKGROUND_MUSIC_VOLUME em
-                 script.js). Ajuste é salvo e aplicado na hora, mesmo com a música já tocando. -->
+            <!-- Volume REAL da música de fundo (40% no slider = 40% de volume de verdade — ver
+                 BACKGROUND_MUSIC_DEFAULT_VOLUME em script.js). Ajuste é salvo e aplicado na hora,
+                 mesmo com a música já tocando. -->
             <div class="music-volume">
                 <span class="music-volume-label">VOLUME</span>
-                <input type="range" id="musicVolumeSlider" min="0" max="100" value="100" class="music-volume-slider">
-                <span class="music-volume-value" id="musicVolumeValue">100%</span>
+                <button class="music-mute-btn" id="musicMuteBtn" title="Mutar/desmutar a música de fundo">&#128266;</button>
+                <input type="range" id="musicVolumeSlider" min="0" max="100" value="40" class="music-volume-slider">
+                <span class="music-volume-value" id="musicVolumeValue">40%</span>
             </div>
         </div>
 

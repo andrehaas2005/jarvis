@@ -3,13 +3,15 @@
 // ID do agente ElevenLabs Conversational AI (painel da ElevenLabs → seu agente).
 const ELEVENLABS_AGENT_ID = 'agent_0401ktc7pg1xev08smgfd1t20m52';
 
-// Música de fundo tocada durante a conversa, a 25% do volume. O arquivo em si NÃO fica no git
-// (ver .gitignore — é conteúdo com direitos autorais, só existe na sua máquina). Pra trocar a
-// faixa padrão, é só substituir o arquivo em assets/music/background.mp3 por outro mp3/wav
-// (mesmo nome). Pra testar uma faixa diferente sem mexer em arquivo nenhum, ou desligar a música,
-// use o botão "MÚSICA" na barra superior do HUD.
+// Música de fundo tocada durante a conversa. O arquivo em si NÃO fica no git (ver .gitignore —
+// é conteúdo com direitos autorais, só existe na sua máquina). Pra trocar a faixa padrão, é só
+// substituir o arquivo em assets/music/background.mp3 por outro mp3/wav (mesmo nome). Pra testar
+// uma faixa diferente sem mexer em arquivo nenhum, ou desligar a música, use o botão "MÚSICA" na
+// barra superior do HUD.
 const BACKGROUND_MUSIC_SRC = 'assets/music/background.mp3';
-const BACKGROUND_MUSIC_VOLUME = 0.25;
+// Volume inicial do slider "VOLUME" — é um valor REAL (40 no slider = 40% de volume de verdade,
+// sem multiplicar por nada), pra não encobrir a voz do Jarvis nem a sua.
+const BACKGROUND_MUSIC_DEFAULT_VOLUME = 0.4;
 
 // Frases de ativação por voz — diga qualquer uma delas com o microfone liberado (fora de uma
 // conversa) que o Jarvis inicia a conversa sozinho, sem precisar clicar em "Sistema Ativo".
@@ -93,10 +95,13 @@ class JARVISInterface {
         this.vuMusic = document.getElementById('vuMusic');
         this.musicVolumeSlider = document.getElementById('musicVolumeSlider');
         this.musicVolumeValue = document.getElementById('musicVolumeValue');
-        // Multiplicador (0..1) sobre o BACKGROUND_MUSIC_VOLUME base (25%) — controlado pelo
-        // slider "VOL. MÚSICA". Salvo entre sessões.
+        this.musicMuteBtn = document.getElementById('musicMuteBtn');
+        // Volume REAL (0..1) da música — o que o slider "VOLUME" mostra é exatamente o que toca,
+        // sem multiplicar por nada. Começa em BACKGROUND_MUSIC_DEFAULT_VOLUME (40%) e fica salvo
+        // entre sessões a partir da primeira vez que você mexer no slider.
         const savedVolume = parseInt(localStorage.getItem('jarvis-music-volume'), 10);
-        this.musicVolumeMultiplier = Number.isFinite(savedVolume) ? savedVolume / 100 : 1;
+        this.musicVolume = Number.isFinite(savedVolume) ? savedVolume / 100 : BACKGROUND_MUSIC_DEFAULT_VOLUME;
+        this.musicMuted = localStorage.getItem('jarvis-music-muted') === 'true';
         this.musicAudioContext = null; // Web Audio API — só pro VU-meter da música
         this.musicAnalyser = null;
         this.musicAnalyserData = null;
@@ -170,33 +175,57 @@ class JARVISInterface {
             });
         }
 
-        // Slider de volume — ajusta um multiplicador sobre os 25% base (BACKGROUND_MUSIC_VOLUME).
+        // Slider de volume — o valor mostrado É o volume real (40% no slider = 40% de volume).
         // Aplica na hora, mesmo com a música já tocando (sem esperar a próxima conversa).
         if (this.musicVolumeSlider) {
-            this.musicVolumeSlider.value = String(Math.round(this.musicVolumeMultiplier * 100));
+            this.musicVolumeSlider.value = String(Math.round(this.musicVolume * 100));
             this.updateMusicVolumeLabel();
             this.musicVolumeSlider.addEventListener('input', () => {
                 const percent = Number(this.musicVolumeSlider.value);
-                this.musicVolumeMultiplier = percent / 100;
+                this.musicVolume = percent / 100;
                 localStorage.setItem('jarvis-music-volume', String(percent));
+                // Mexer no slider manualmente desmuta — comportamento padrão de qualquer player
+                if (this.musicMuted) this.setMusicMuted(false);
                 this.updateMusicVolumeLabel();
                 if (this.bgMusic && !this.bgMusic.paused) {
                     this.bgMusic.volume = this.targetMusicVolume();
                 }
             });
         }
+
+        // Botão de mute — silencia sem perder o valor do slider, pra restaurar depois
+        this.syncMuteButton();
+        if (this.musicMuteBtn) {
+            this.musicMuteBtn.addEventListener('click', () => this.setMusicMuted(!this.musicMuted));
+        }
+    }
+
+    setMusicMuted(muted) {
+        this.musicMuted = muted;
+        localStorage.setItem('jarvis-music-muted', String(muted));
+        this.syncMuteButton();
+        if (this.bgMusic && !this.bgMusic.paused) {
+            this.bgMusic.volume = this.targetMusicVolume();
+        }
+    }
+
+    syncMuteButton() {
+        if (!this.musicMuteBtn) return;
+        this.musicMuteBtn.classList.toggle('muted', this.musicMuted);
+        this.musicMuteBtn.innerHTML = this.musicMuted ? '&#128263;' : '&#128266;';
     }
 
     updateMusicVolumeLabel() {
         if (this.musicVolumeValue) {
-            this.musicVolumeValue.textContent = `${Math.round(this.musicVolumeMultiplier * 100)}%`;
+            this.musicVolumeValue.textContent = `${Math.round(this.musicVolume * 100)}%`;
         }
     }
 
-    // Volume real de reprodução = 25% (base, pra ficar sempre bem abaixo da voz do Jarvis) × o
-    // multiplicador do slider (0 a 100%).
+    // Volume real de reprodução — exatamente o que o slider "VOLUME" mostra, sem multiplicar por
+    // nada (assim dá pra saber, olhando o slider, o volume de verdade que está tocando). Zero se
+    // mutado, sem alterar o valor salvo do slider.
     targetMusicVolume() {
-        return BACKGROUND_MUSIC_VOLUME * this.musicVolumeMultiplier;
+        return this.musicMuted ? 0 : this.musicVolume;
     }
 
     syncMusicButton() {
