@@ -9,9 +9,10 @@ const ELEVENLABS_AGENT_ID = 'agent_0401ktc7pg1xev08smgfd1t20m52';
 // uma faixa diferente sem mexer em arquivo nenhum, ou desligar a música, use o botão "MÚSICA" na
 // barra superior do HUD.
 const BACKGROUND_MUSIC_SRC = 'assets/music/background.mp3';
-// Volume inicial do slider "VOLUME" — é um valor REAL (40 no slider = 40% de volume de verdade,
-// sem multiplicar por nada), pra não encobrir a voz do Jarvis nem a sua.
-const BACKGROUND_MUSIC_DEFAULT_VOLUME = 0.4;
+// Volume inicial do slider "VOLUME" — é um valor REAL (10 no slider = 10% de volume de verdade,
+// sem multiplicar por nada). A faixa padrão é "pesada", então começa baixo pra não encobrir a
+// voz do Jarvis nem a sua.
+const BACKGROUND_MUSIC_DEFAULT_VOLUME = 0.1;
 
 // Frases de ativação por voz — diga qualquer uma delas com o microfone liberado (fora de uma
 // conversa) que o Jarvis inicia a conversa sozinho, sem precisar clicar em "Sistema Ativo".
