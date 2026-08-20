@@ -87,7 +87,14 @@ async def jarvis_webhook(
 
     Um LLM (`app/orchestrator/router.py`) decide qual MCP tool chamar
     (Gmail/Calendar/Contacts) a partir da query, com memória de conversa
-    por `x-conversation-id` (equivalente ao "Simple Memory" do n8n)."""
+    por conversa — equivalente ao "Simple Memory" do n8n.
+
+    O ElevenLabs manda o `conversation_id` no **corpo** da requisição (não
+    como header) — foi um bug real em produção (achado sessão 3): sem
+    `conversation_id` no corpo, todas as conversas caíam na mesma sessão
+    'default' e o LLM via contexto de conversas completamente diferentes
+    misturado. `x-conversation-id` (header) continua aceito como
+    alternativa, pra manter compatibilidade se algum outro cliente usar."""
     if not settings.jarvis_webhook_secret or not hmac.compare_digest(
         x_jarvis_secret or "", settings.jarvis_webhook_secret
     ):
@@ -98,7 +105,7 @@ async def jarvis_webhook(
     if not query:
         raise HTTPException(status_code=400, detail="campo 'query' obrigatório no corpo")
 
-    session_id = x_conversation_id or "default"
+    session_id = body.get("conversation_id") or x_conversation_id or "default"
 
     try:
         answer = await handle_query(query, session_id)

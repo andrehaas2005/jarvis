@@ -12,6 +12,7 @@ em `asyncio.to_thread` no server.py — este cliente não é async.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,6 +27,13 @@ logger = get_logger("jarvis.mcp.contacts")
 SCOPES = ["https://www.googleapis.com/auth/contacts"]
 
 _PERSON_FIELDS = "names,emailAddresses,phoneNumbers"
+
+# Cache em memória da lista de contatos — evita paginar todos os 230+
+# contatos do Google a cada busca (achado sessão 3: latência alta demais
+# fazia o agente de voz "abandonar" a chamada da tool no meio do caminho,
+# ver ROADMAP_SESSION.md). Contatos mudam raramente; 2 min é suficiente
+# pra não servir dado visivelmente desatualizado.
+_PEOPLE_CACHE_TTL_SECONDS = 120
 
 
 @dataclass
@@ -44,6 +52,8 @@ class ContactsClient:
         self._credentials_path = credentials_path
         self._token_path = token_path
         self._service = None
+        self._people_cache: list[dict[str, Any]] | None = None
+        self._people_cache_at: float = 0.0
 
     @property
     def service(self):
@@ -65,8 +75,18 @@ class ContactsClient:
             phone=phones[0].get("value", "") if phones else "",
         )
 
-    def _list_all_people(self) -> list[dict[str, Any]]:
-        """Lista todos os contatos do usuário (people/me), paginando."""
+    def _list_all_people(self, *, fresh: bool = False) -> list[dict[str, Any]]:
+        """Lista todos os contatos do usuário (people/me), paginando.
+
+        Cacheado por `_PEOPLE_CACHE_TTL_SECONDS` — buscar 230+ contatos do
+        zero a cada tool call era a maior fonte de latência do orquestrador
+        (voz abandonava a chamada no meio). Passe `fresh=True` só quando
+        precisar garantir dado atualizado na hora (ex.: depois de um
+        upsert)."""
+        now = time.monotonic()
+        if not fresh and self._people_cache is not None and now - self._people_cache_at < _PEOPLE_CACHE_TTL_SECONDS:
+            return self._people_cache
+
         people: list[dict[str, Any]] = []
         page_token: str | None = None
 
@@ -87,15 +107,21 @@ class ContactsClient:
             if not page_token:
                 break
 
+        self._people_cache = people
+        self._people_cache_at = now
         return people
 
-    def _exact_match(self, name: str) -> Contact | None:
-        """Busca um contato por nome exato (case-insensitive). Usado pelo
+    def _invalidate_people_cache(self) -> None:
+        self._people_cache = None
+
+    def _exact_match(self, name: str, people: list[dict[str, Any]] | None = None) -> Contact | None:
+        """Busca um contato por nome exato (case-insensitive) numa lista já
+        carregada (ou carrega uma, se não vier uma pronta). Usado pelo
         upsert, que precisa ter certeza de casar com a pessoa certa antes
         de sobrescrever campos."""
         needle = name.strip().lower()
 
-        for person in self._list_all_people():
+        for person in people if people is not None else self._list_all_people():
             for name_entry in person.get("names", []):
                 if name_entry.get("displayName", "").strip().lower() == needle:
                     return self._person_to_contact(person)
@@ -115,7 +141,9 @@ class ContactsClient:
         - substring bateu em mais de um contato (ambíguo, sem exato):
           `(None, candidates)` — quem chamar deve pedir pra especificar.
         """
-        exact = self._exact_match(name)
+        people = self._list_all_people()
+
+        exact = self._exact_match(name, people)
         if exact is not None:
             logger.info(
                 "contacts_search_found_exact",
@@ -125,7 +153,7 @@ class ContactsClient:
 
         needle = name.strip().lower()
         candidates: list[Contact] = []
-        for person in self._list_all_people():
+        for person in people:
             for name_entry in person.get("names", []):
                 if needle in name_entry.get("displayName", "").strip().lower():
                     candidates.append(self._person_to_contact(person))
@@ -177,6 +205,7 @@ class ContactsClient:
             person = self.service.people().createContact(body=body).execute()
 
         contact = self._person_to_contact(person)
+        self._invalidate_people_cache()
         logger.info(
             "contacts_upsert",
             extra={"extra_fields": {"name": name, "created": existing is None}},
