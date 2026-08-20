@@ -94,6 +94,14 @@ class JARVISInterface {
         this.creditsValueEleven = document.getElementById('creditsValueEleven');
         this.creditsFillEleven = document.getElementById('creditsFillEleven');
         this.creditsValueAnthropic = document.getElementById('creditsValueAnthropic');
+
+        // Presença — um ID por aba (não por pessoa: sem login, não dá pra saber quem é quem,
+        // só quantas abas/dispositivos distintos têm o HUD aberto agora). Persistido em
+        // sessionStorage pra sobreviver a re-render sem virar uma sessão nova a cada heartbeat.
+        this.presenceSessionId = sessionStorage.getItem('jarvis-presence-id')
+            || crypto.randomUUID();
+        sessionStorage.setItem('jarvis-presence-id', this.presenceSessionId);
+        this.presenceValue = document.getElementById('presenceValue');
         this.conversationStartedAt = null;
         this.messageCount = 0;
         this.durationTimerId = null;
@@ -159,6 +167,14 @@ class JARVISInterface {
         // pra não gerar tráfego desnecessário nelas.
         this.loadStatusCredits();
         setInterval(() => this.loadStatusCredits(), 5 * 60000);
+
+        // Heartbeat de presença — a cada 20s enquanto a aba está aberta (ver GET/POST
+        // /status/presence no backend). Um heartbeat perdido não faz a sessão sumir da
+        // contagem (janela de 45s no backend), mas evita mandar quando a aba está em segundo
+        // plano (economiza sem afetar a contagem real, já que quem está mesmo interagindo
+        // costuma estar com a aba em foco).
+        this.loadPresenceHeartbeat();
+        setInterval(() => this.loadPresenceHeartbeat(), 20000);
 
         this.setupBackgroundMusic();
         this.setupWakeWordListener();
@@ -715,6 +731,25 @@ class JARVISInterface {
             }
         } catch (error) {
             console.warn('Falha ao buscar créditos do backend:', error.message);
+        }
+    }
+
+    // Heartbeat de presença — só manda com a aba em foco (visibilityState 'visible'), pra não
+    // contar abas esquecidas em segundo plano como "sessão ativa" à toa. Não identifica a
+    // pessoa (sem login) — só quantas abas/dispositivos distintos estão realmente com o HUD
+    // na tela agora.
+    async loadPresenceHeartbeat() {
+        if (document.visibilityState !== 'visible') return;
+        try {
+            const response = await fetch(`${JARVIS_BACKEND_URL}/status/presence`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: this.presenceSessionId }),
+            });
+            const data = await response.json();
+            if (this.presenceValue) this.presenceValue.textContent = data.active_sessions;
+        } catch (error) {
+            console.warn('Falha ao enviar heartbeat de presença:', error.message);
         }
     }
 

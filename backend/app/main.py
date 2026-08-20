@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.elevenlabs import get_signed_conversation_url
 from app.logging_config import get_logger, setup_logging
 from app.orchestrator.router import handle_query
+from app.presence import get_active_count, heartbeat
 from app.status import get_checkin, get_credits
 
 settings = get_settings()
@@ -87,6 +88,27 @@ async def status_checkin() -> dict:
 async def status_credits() -> dict:
     """Consumo das APIs pagas (ElevenLabs, Anthropic) pro painel do HUD."""
     return await get_credits()
+
+
+@app.post("/status/presence")
+async def status_presence(request: Request) -> dict:
+    """Heartbeat de presença — o HUD chama isso a cada ~20s enquanto a
+    página está aberta (ver loadPresenceHeartbeat em script.js). Não
+    identifica a pessoa (sem login), só conta abas/dispositivos distintos
+    com heartbeat recente. `session_id` é gerado no navegador (sessionStorage,
+    um por aba)."""
+    body = await request.json()
+    session_id = body.get("session_id", "")
+    if not session_id:
+        raise HTTPException(status_code=400, detail="campo 'session_id' obrigatório no corpo")
+    return {"active_sessions": heartbeat(session_id)}
+
+
+@app.get("/status/presence")
+async def status_presence_get() -> dict:
+    """Leitura sem registrar heartbeat — útil pra checar de fora (ex.: você
+    perguntando pro Jarvis por voz) sem contar a própria consulta como sessão."""
+    return {"active_sessions": get_active_count()}
 
 
 @app.post("/jarvis/webhook")
