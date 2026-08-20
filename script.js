@@ -87,6 +87,13 @@ class JARVISInterface {
         this.clockSP = document.getElementById('clockSP');
         this.clockNY = document.getElementById('clockNY');
         this.clockLON = document.getElementById('clockLON');
+
+        // Check-in (Email/Calendar/Contacts) + Créditos (ElevenLabs/Anthropic) — painel
+        // lateral esquerdo, ver getStatusCheckin()/getStatusCredits() mais abaixo.
+        this.checkinCapabilities = ['email', 'calendar', 'contacts'];
+        this.creditsValueEleven = document.getElementById('creditsValueEleven');
+        this.creditsFillEleven = document.getElementById('creditsFillEleven');
+        this.creditsValueAnthropic = document.getElementById('creditsValueAnthropic');
         this.conversationStartedAt = null;
         this.messageCount = 0;
         this.durationTimerId = null;
@@ -144,6 +151,14 @@ class JARVISInterface {
         this.updateWorldClocks();
         setInterval(() => this.updateWorldClocks(), 30000);
         this.loadWeather();
+
+        // Check-in real das capacidades — atualiza rápido (dado local no backend, sem custo).
+        this.loadStatusCheckin();
+        setInterval(() => this.loadStatusCheckin(), 20000);
+        // Créditos — chama APIs pagas de terceiros (ElevenLabs/Anthropic), atualiza mais devagar
+        // pra não gerar tráfego desnecessário nelas.
+        this.loadStatusCredits();
+        setInterval(() => this.loadStatusCredits(), 5 * 60000);
 
         this.setupBackgroundMusic();
         this.setupWakeWordListener();
@@ -643,6 +658,63 @@ class JARVISInterface {
             console.error('Falha ao buscar clima real:', error);
             this.weatherValue.textContent = 'indisponível';
             this.lastWeather = null;
+        }
+    }
+
+    // Check-in real de Email/Calendar/Contacts (GET /status/checkin) — dado de uso real
+    // rastreado no backend (não um ping sintético), ver status_tracker.py. Nasceu do SCRUM-52:
+    // o Jarvis dizia "não tenho acesso" por voz sem dar nenhum jeito de confirmar rápido se
+    // era bug de verdade ou o modelo alucinando.
+    async loadStatusCheckin() {
+        try {
+            const response = await fetch(`${JARVIS_BACKEND_URL}/status/checkin`);
+            const data = await response.json();
+            for (const capability of this.checkinCapabilities) {
+                const info = data[capability];
+                const dot = document.getElementById(`checkinDot-${capability}`);
+                const detail = document.getElementById(`checkinDetail-${capability}`);
+                if (!dot || !detail || !info) continue;
+
+                dot.classList.remove('status-ok', 'status-erro');
+                if (info.status === 'ok') {
+                    dot.classList.add('status-ok');
+                    detail.textContent = `${Math.round(info.success_rate * 100)}% ok`;
+                } else if (info.status === 'erro') {
+                    dot.classList.add('status-erro');
+                    detail.textContent = 'falhou';
+                } else {
+                    detail.textContent = 'sem dados';
+                }
+            }
+        } catch (error) {
+            console.warn('Falha ao buscar check-in do backend:', error.message);
+        }
+    }
+
+    // Consumo das APIs pagas (GET /status/credits) — ElevenLabs (uso real via API) e Anthropic
+    // (gasto do mês via Admin API, se configurada no backend).
+    async loadStatusCredits() {
+        try {
+            const response = await fetch(`${JARVIS_BACKEND_URL}/status/credits`);
+            const data = await response.json();
+
+            const eleven = data.elevenlabs;
+            if (eleven?.available) {
+                this.creditsValueEleven.textContent = `${eleven.percent_used}%`;
+                this.creditsFillEleven.style.width = `${Math.min(eleven.percent_used, 100)}%`;
+                this.creditsFillEleven.classList.toggle('credits-warning', eleven.percent_used >= 80);
+            } else {
+                this.creditsValueEleven.textContent = 'indisponível';
+            }
+
+            const anthropic = data.anthropic;
+            if (anthropic?.available) {
+                this.creditsValueAnthropic.textContent = `US$ ${anthropic.spend_usd.toFixed(2)}`;
+            } else {
+                this.creditsValueAnthropic.textContent = 'indisponível';
+            }
+        } catch (error) {
+            console.warn('Falha ao buscar créditos do backend:', error.message);
         }
     }
 
