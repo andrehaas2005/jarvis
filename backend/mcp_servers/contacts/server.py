@@ -54,18 +54,30 @@ def _get_client() -> ContactsClient:
 
 @mcp.tool()
 async def search_contact(name: str) -> dict:
-    """Busca um contato pelo nome exato. Retorna os campos do contato
-    (name, email, phone) ou found=False se não existir na agenda."""
+    """Busca um contato pelo nome (aceita nome parcial, ex.: "Maria" acha
+    "Maria Aparecida de Oliveira" se só existir uma). Retorna os campos do
+    contato (name, email, phone) se achar exatamente um.
+
+    Se `name` bater em mais de um contato, retorna `found=False,
+    ambiguous=True` e a lista de `candidates` — quem chamou deve pedir pra
+    o usuário especificar melhor (ex.: sobrenome) antes de seguir.
+    Se não achar nenhum, retorna só `found=False`."""
     client = _get_client()
-    contact = await asyncio.to_thread(client.search_contact, name)
-    if contact is None:
-        return {"found": False}
-    return {
-        "found": True,
-        "name": contact.name,
-        "email": contact.email,
-        "phone": contact.phone,
-    }
+    contact, candidates = await asyncio.to_thread(client.search_contact, name)
+    if contact is not None:
+        return {
+            "found": True,
+            "name": contact.name,
+            "email": contact.email,
+            "phone": contact.phone,
+        }
+    if candidates:
+        return {
+            "found": False,
+            "ambiguous": True,
+            "candidates": [{"name": c.name, "email": c.email} for c in candidates],
+        }
+    return {"found": False}
 
 
 @mcp.tool()
