@@ -3,6 +3,10 @@
 // ID do agente ElevenLabs Conversational AI (painel da ElevenLabs → seu agente).
 const ELEVENLABS_AGENT_ID = 'agent_0401ktc7pg1xev08smgfd1t20m52';
 
+// Backend orquestrador (SCRUM-16). Usado para pedir a signed URL da ElevenLabs — ver
+// getElevenLabsSignedUrl() logo abaixo.
+const JARVIS_BACKEND_URL = 'http://localhost:8000';
+
 // Música de fundo tocada durante a conversa. O arquivo em si NÃO fica no git (ver .gitignore —
 // é conteúdo com direitos autorais, só existe na sua máquina). Pra trocar a faixa padrão, é só
 // substituir o arquivo em assets/music/background.mp3 por outro mp3/wav (mesmo nome). Pra testar
@@ -989,6 +993,24 @@ class JARVISInterface {
         }
     }
 
+    // Pede ao backend (SCRUM-16) uma signed URL autenticada da ElevenLabs. Conectar direto com
+    // agentId funciona para voz/texto (agente público), mas conversation.uploadFile() — usado pela
+    // visão da câmera — respondia 403 nesse modo anônimo (fix SCRUM-48). Se o backend não estiver
+    // no ar, cai em `null`: a conversa continua funcionando normalmente por agentId, só a visão por
+    // câmera que não vai funcionar até o backend subir.
+    async getElevenLabsSignedUrl() {
+        try {
+            const response = await fetch(`${JARVIS_BACKEND_URL}/elevenlabs/signed-url`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const { signed_url } = await response.json();
+            return signed_url;
+        } catch (error) {
+            console.warn('Não foi possível obter signed URL do backend, usando agentId direto:', error);
+            this.pushLog('[AVISO] Backend indisponível — visão por câmera pode falhar (403)');
+            return null;
+        }
+    }
+
     // Inicia uma conversa real com o agente ElevenLabs via SDK (@elevenlabs/client).
     // Cada callback abaixo alimenta o painel lateral (.log-content) e o texto de status com o que
     // está realmente acontecendo — nada aqui é simulado.
@@ -1021,9 +1043,14 @@ class JARVISInterface {
         this.pushLog('[REDE] Conectando ao agente JARVIS (ElevenLabs)...');
         this.updateVoiceStatus('CONECTANDO...');
 
+        // Signed URL autenticada quando o backend está disponível (habilita upload de imagem pela
+        // câmera — fix SCRUM-48); cai para agentId puro se o backend estiver fora do ar.
+        const signedUrl = await this.getElevenLabsSignedUrl();
+        const sessionTarget = signedUrl ? { signedUrl } : { agentId: ELEVENLABS_AGENT_ID };
+
         try {
             this.conversation = await window.ElevenLabsClient.Conversation.startSession({
-                agentId: ELEVENLABS_AGENT_ID,
+                ...sessionTarget,
                 // Rotina do primeiro contato do dia: clima real + previsão de chuva + agenda,
                 // injetada como variável dinâmica {{daily_briefing}} — usada na primeira mensagem
                 // do agente (configurada no painel da ElevenLabs). Nas próximas conversas do mesmo
