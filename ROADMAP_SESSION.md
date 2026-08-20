@@ -1,8 +1,8 @@
 # 📋 JARVIS Roadmap - Sessão de Continuidade
 
 **Data de Criação:** 2026-08-19  
-**Última Atualização:** 2026-08-20 (sessão 3 — Contacts migrado de Airtable p/ Google People API, sem custo, sem cadastro duplicado)  
-**Status Geral:** Sprint 1 Ativo ✅ — Backend Python rodando em produção (https://jarvis-api.andre.haas.nom.br)
+**Última Atualização:** 2026-08-20 (sessão 3 — SCRUM-17: orquestrador Python em produção, testado por voz de ponta a ponta; n8n ainda ativo até desativação explícita)  
+**Status Geral:** Sprint 1 Ativo ✅ — Backend Python rodando em produção (https://jarvis-api.andre.haas.nom.br), agora incluindo o orquestrador (`/jarvis/webhook`)
 
 ---
 
@@ -16,14 +16,14 @@
 
 ### Status Atual
 ```
-Total Issues: 41 (SCRUM-8 a SCRUM-50)
+Total Issues: 42 (SCRUM-8 a SCRUM-51)
 ├── 4 Epics (SCRUM-8 a SCRUM-11)
-├── 37 Histórias (SCRUM-14 a SCRUM-50)
-│   ├── 15 no Sprint 1 original + SCRUM-49/50 (novos, criados sessão 2)
+├── 38 Histórias (SCRUM-14 a SCRUM-51)
+│   ├── 15 no Sprint 1 original + SCRUM-49/50 (sessão 2) + SCRUM-51 (sessão 3, bugfix)
 │   └── 20 no Backlog (FASE 2 + FASE 3)
-├── 5 tickets CONCLUÍDOS: 14, 15, 16, 48, 50 (deploy real em produção, testado)
+├── 6 tickets CONCLUÍDOS: 14, 15, 16, 48, 49, 50 (deploy real em produção, testado)
 ├── 2 tickets em Em análise: 45, 46 (fix real testado, falta remover n8n pra fechar)
-└── 2 tickets em Em andamento: 47 (falta integrar contact lookup), 49 (falta autorizar escopo `contacts` no servidor)
+└── 2 tickets em Em andamento: 17 (endpoint novo testado por voz, falta desativar n8n), 47 (fix testado, mesma pendência do 17)
 ```
 
 ---
@@ -92,7 +92,34 @@ Os primeiros PRs desta sessão foram criados empilhados (cada um com base no ant
 ### ⚠️ Pendências restantes
 1. ~~Ativar a People API + autorizar OAuth~~ — **feito** (local e produção)
 2. ~~Conectar `search_contact` (SCRUM-49) ao fluxo de `create_event` (SCRUM-15)~~ — **feito** (sessão 3): `create_event` resolve `attendees` por nome via Contacts antes de criar o evento; testado real (nome único, ambíguo, não encontrado, email direto)
-3. **SCRUM-17** — remover n8n de vez (só depois disso SCRUM-45/46/47 fecham como Concluído)
+3. **SCRUM-17 — falta só desativar os workflows JARVIS no n8n** (ver seção abaixo) — o endpoint novo já está em produção e testado por voz
+
+---
+
+## 🚀 O que foi feito — SESSÃO 3 (SCRUM-17: orquestrador Python substitui o n8n)
+
+### Diagnóstico
+O agente de voz do ElevenLabs tinha **uma única ferramenta**: um webhook POST pro n8n (`n8n.andre.haas.nom.br/webhook/n8n-connection`), com **17.9% de taxa de erro** e **9.5s de latência média** (medidos no próprio painel do ElevenLabs — Ferramentas → stats). O n8n rodava um agente (`JARVIS`, node `@n8n/langchain.agent`, GPT-5) que decidia chamar sub-agentes aninhados: Email Agent Tool, Calendar Agent Tool, Contact Agent Tool, Content Creator Agent Tool (Tavily + geração de conteúdo).
+
+### ✅ CONCLUÍDO
+- **`app/orchestrator/`** (novo) — substitui o node `JARVIS` do n8n:
+  - `providers.py` — abstração `LLMProvider` + `AnthropicProvider` (loop manual de tool-calling, sem beta `tool_runner`). Trocar de provedor no futuro = nova classe + `LLM_PROVIDER` no `.env`, sem reescrever o resto.
+  - `tools.py` — 8 tools chamando os MCP Servers (Gmail/Calendar/Contacts) **direto**, sem os sub-agentes aninhados do n8n. `idempotency_key` gerada por hash de conteúdo, não exposta ao LLM.
+  - `memory.py` — memória de sessão em processo por `conversation_id` (equivalente ao "Simple Memory" do n8n).
+  - `router.py` — system prompt adaptado do `JARVIS.sanitized.json` original: roteamento puro + **confirmação explícita antes de ação destrutiva/irreversível**.
+- **`POST /jarvis/webhook`** em `main.py` — mesmo contrato do webhook n8n (`{"query": "..."}` in/out, header `x-jarvis-secret`, reaproveitado o mesmo secret já usado pelo n8n).
+- **Content Creator Agent (Tavily) ficou fora de escopo** — decisão da sessão, vira ticket separado se for retomado.
+- **SCRUM-51 (bugfix, achado testando em produção):** `google_auth.py` quebrava com `[Errno 30] Read-only file system` ao tentar persistir token renovado — o mount `/app/.credentials:ro` no servidor é somente leitura de propósito. Fix: persistir vira best-effort (warning, não exceção); credenciais renovadas em memória continuam válidas pra chamada atual.
+- **ElevenLabs reconfigurado:** tool renomeada de `n8n_webhook` pra `jarvis_backend`, URL trocada pra `https://jarvis-api.andre.haas.nom.br/jarvis/webhook`. Prompt do sistema do agente também tinha o nome da tool **hardcoded** (`'n8n'`) — corrigido pra `'jarvis_backend'` em todas as ocorrências (Primary Function, Corrections, Example Interactions) e publicado.
+- **Testado real de ponta a ponta:**
+  - Direto no endpoint (`curl`): `search_contact` funcionando, 401 sem secret correto
+  - Confirmação antes de ação destrutiva: 1ª msg pede confirmação, 2ª msg (mesma sessão) executa — memória multi-turn OK
+  - **Conversa real via preview do ElevenLabs:** "qual o email da Maria Aparecida?" → agente chamou `jarvis_backend` → resolveu via Contacts → resposta certa
+
+### ⚠️ Pendente
+- **Desativar (não deletar) os workflows JARVIS no n8n**: `JARVIS`, `Email Agent Tool`, `Calendar Agent Tool`, `Contacts Agent Tool`, `Content Creator Agent Tool` — só esses, o resto do n8n (outros projetos no mesmo Hostinger) continua rodando normal
+- Só depois disso os SCRUM-45/46/47 fecham como **Concluído** de vez
+- Monitorar taxa de erro/latência do `jarvis_backend` no painel do ElevenLabs nos próximos dias, comparando com os 17.9%/9.5s do n8n antigo
 
 ---
 
@@ -131,7 +158,7 @@ Deploy bem-sucedido em PRODUÇÃO
 ## 📊 Próximas Ações (Ordem de Prioridade)
 
 ### IMEDIATO (Sprint 1) — retomar por aqui
-1. **SCRUM-17** — Remover n8n / migrar de vez (só depois disso os SCRUM-45/46/47 fecham como Concluído)
+1. **SCRUM-17** — Desativar os workflows JARVIS no n8n (endpoint novo já testado por voz em produção — ver sessão 3)
 2. Testar o HUD (frontend) apontando pro backend de produção (hoje `script.js` usa `JARVIS_BACKEND_URL = 'http://localhost:8000'` — trocar pra `https://jarvis-api.andre.haas.nom.br` quando for usar em produção)
 
 ### CURTO PRAZO (Fim Sprint 1)
