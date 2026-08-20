@@ -45,9 +45,12 @@ backend/
 │   ├── gmail/                # MCP Server do Gmail (SCRUM-14)
 │   │   ├── gmail_client.py   # wrapper Gmail API
 │   │   └── server.py         # tools MCP: send_email, list_emails, read_email
-│   └── calendar/             # MCP Server do Google Calendar (SCRUM-15)
-│       ├── calendar_client.py # wrapper Calendar API
-│       └── server.py          # tools MCP: create_event, list_events, get_event
+│   ├── calendar/              # MCP Server do Google Calendar (SCRUM-15)
+│   │   ├── calendar_client.py # wrapper Calendar API
+│   │   └── server.py          # tools MCP: create_event, list_events, get_event
+│   └── contacts/              # MCP Server de Contacts / Airtable (SCRUM-49)
+│       ├── contacts_client.py # wrapper Airtable REST API
+│       └── server.py          # tools MCP: search_contact, add_or_update_contact
 ├── requirements.txt
 └── .env.example
 ```
@@ -106,6 +109,39 @@ CALENDAR_TOKEN_PATH=/caminho/para/token.json
 
 ```bash
 python -m mcp_servers.calendar.server
+```
+
+## MCP Server — Contacts / Airtable (SCRUM-49)
+
+Nasceu do diagnóstico do SCRUM-47: o Calendar Agent do n8n não tinha nenhum
+jeito determinístico de resolver nome→email de um attendee. Expõe 2 ferramentas MCP:
+
+- **`search_contact(name)`** — busca contato por nome exato, retorna
+  `{found, name, email, phone}`.
+- **`add_or_update_contact(name, email, phone)`** — upsert por nome (cria
+  se não existir, atualiza os campos passados se existir).
+
+O backend orquestrador deve chamar `search_contact` antes de
+`calendar.create_event` sempre que o attendee vier como nome em vez de
+email — fecha o SCRUM-47 de vez.
+
+### Configurar Airtable
+
+1. Gere um Personal Access Token em [airtable.com/create/tokens](https://airtable.com/create/tokens) com escopo `data.records:read` e `data.records:write` na base de contatos.
+2. Pegue o Base ID na URL da base (`https://airtable.com/appXXXXXXXXXXXXXX/...` — o `appXXXXXXXXXXXXXX` é o Base ID).
+3. No `.env`:
+   ```
+   AIRTABLE_API_KEY=pat...
+   AIRTABLE_BASE_ID=appXXXXXXXXXXXXXX
+   AIRTABLE_TABLE_NAME=Sheet1
+   ```
+
+A tabela deve ter as colunas `Nome`, `Email`, `Telefone` (mesmo schema do `Contacts Agent Tool` do n8n).
+
+### Rodar standalone (stdio)
+
+```bash
+python -m mcp_servers.contacts.server
 ```
 
 ## Retry + Idempotência
