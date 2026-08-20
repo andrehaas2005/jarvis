@@ -71,6 +71,7 @@ body {
     background: rgba(0, 212, 255, 0.04);
     border: 1px solid var(--hud-blue);
     border-radius: 8px;
+    min-width: 0;
 }
 
 .topbar-brand {
@@ -103,6 +104,21 @@ body {
     display: flex;
     align-items: center;
     gap: 14px;
+    /* Em telas estreitas os botões não cabem todos — em vez de estourar a tela (cortando os
+       últimos, inclusive SLEEP), a barra vira scroll horizontal por toque. Não afeta desktop
+       (tudo cabe, não sobra o que rolar). min-width:0 é o que permite esse item flex encolher
+       abaixo do conteúdo — sem isso o overflow-x:auto não tem efeito nenhum. */
+    overflow-x: auto;
+    scrollbar-width: none;
+    min-width: 0;
+}
+
+.topbar-actions::-webkit-scrollbar {
+    display: none;
+}
+
+.topbar-actions > * {
+    flex-shrink: 0;
 }
 
 .topbar-status {
@@ -178,6 +194,10 @@ body {
     backdrop-filter: blur(10px);
     position: relative;
     overflow: hidden;
+    /* Itens de grid não encolhem abaixo do conteúdo por padrão (min-width: auto implícito) —
+       sem isso, um painel com conteúdo largo (ex.: a barra de botões do topo) força a grid
+       inteira a ficar mais larga que a tela no mobile, em vez de conter/rolar como devia. */
+    min-width: 0;
 }
 
 /* Top Left - Earth Status */
@@ -1692,13 +1712,17 @@ body {
 }
 
 @media (max-width: 768px) {
+    /* Foco na interação por voz no mobile: clima, radar e o painel técnico da direita (log,
+       estatísticas, VU meters, volume da música) fazem mais sentido numa tela grande — ficam
+       só no desktop. Check-in + créditos (.left-side) continuam visíveis, compactos, porque são
+       justamente o que dá visibilidade rápida sem precisar perguntar pro Jarvis (ver SCRUM-53). */
     .hud-container {
         grid-template-areas:
             "top-bar"
-            "center"
+            "left-side"
             "center";
         grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr 1fr;
+        grid-template-rows: auto auto 1fr;
         gap: 10px;
         padding: 10px;
     }
@@ -1706,20 +1730,51 @@ body {
     .topbar-brand-sub {
         display: none;
     }
-    
+
     .hud-panel {
         display: none;
     }
-    
-    .center {
+
+    .center,
+    .left-side {
         display: flex;
     }
-    
+
+    .left-side {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px 20px;
+        padding: 10px 16px;
+    }
+
+    .checkin-systems,
+    .credits-panel {
+        flex-direction: row;
+        gap: 16px;
+    }
+
+    /* Detalhe textual ("100% ok"/"sem dados") e a barra de créditos ficam de fora no mobile —
+       a bolinha colorida e o número já dão o essencial no espaço estreito. */
+    .checkin-detail,
+    .credits-bar {
+        display: none;
+    }
+
+    .credits-header {
+        gap: 6px;
+    }
+
+    .camera-icon {
+        display: none;
+    }
+
     .hologram-container {
         width: 250px;
         height: 350px;
     }
-    
+
     .voice-button {
         width: 80px;
         height: 80px;
