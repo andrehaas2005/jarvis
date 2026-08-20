@@ -10,7 +10,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
+from app.auth import authenticate, init_db, issue_token, verify_token
 from app.config import get_settings
 from app.elevenlabs import get_signed_conversation_url
 from app.logging_config import get_logger, setup_logging
@@ -25,6 +27,7 @@ logger = get_logger("jarvis.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_db()
     logger.info(
         "jarvis_backend_starting",
         extra={"extra_fields": {"env": settings.jarvis_env, "port": settings.jarvis_api_port}},
@@ -74,6 +77,49 @@ async def elevenlabs_signed_url() -> dict:
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return {"signed_url": signed_url}
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/auth/login")
+async def auth_login(body: LoginRequest) -> dict:
+    """Login do HUD (SCRUM-56). Primeiro passo de um sistema de perfis
+    maior — hoje só um usuário seed (`andrehaas`, admin), a página de
+    configuração pra criar outros vem depois."""
+    user = authenticate(body.username, body.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Usuário ou senha inválidos")
+    token = issue_token(user)
+    return {
+        "token": token,
+        "user": {
+            "username": user.username,
+            "name": user.name,
+            "jarvis_address": user.jarvis_address,
+            "role": user.role,
+        },
+    }
+
+
+@app.get("/auth/me")
+async def auth_me(authorization: str | None = Header(default=None)) -> dict:
+    """Valida o token do HUD e devolve o usuário — usado no carregamento do
+    HUD pra confirmar a sessão antes de mostrar a tela (e pra restaurar o
+    usuário sem precisar logar de novo a cada visita, dentro da validade
+    do token)."""
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    user = verify_token(token) if token else None
+    if user is None:
+        raise HTTPException(status_code=401, detail="Token inválido ou expirado")
+    return {
+        "username": user.username,
+        "name": user.name,
+        "jarvis_address": user.jarvis_address,
+        "role": user.role,
+    }
 
 
 @app.get("/status/checkin")

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS - Login</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="login.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+</head>
+<body class="login-body">
+    <div class="login-topbar">
+        <div class="topbar-brand">
+            <span class="topbar-brand-chevron">&gt;_</span>
+            <span class="topbar-brand-name">JARVIS</span>
+            <span class="topbar-brand-sub">HUD SYSTEM</span>
+        </div>
+    </div>
+
+    <div class="login-container">
+        <div class="login-card">
+            <!-- Logo: engrenagem + perfil, mesmo ícone do favicon (favicon.svg), em tamanho grande -->
+            <div class="login-logo">
+                <svg viewBox="0 0 64 64" class="login-logo-svg">
+                    <defs>
+                        <linearGradient id="loginLogoGradient" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#00ffff"/>
+                            <stop offset="100%" stop-color="#00d4ff"/>
+                        </linearGradient>
+                    </defs>
+                    <circle cx="32" cy="32" r="29" fill="#050505" stroke="url(#loginLogoGradient)" stroke-width="2"/>
+                    <g fill="none" stroke="url(#loginLogoGradient)" stroke-width="3" stroke-linecap="round">
+                        <path d="M32 4 L32 11"/>
+                        <path d="M60 32 L53 32"/>
+                        <path d="M32 60 L32 53"/>
+                        <path d="M4 32 L11 32"/>
+                        <path d="M51.6 12.4 L46.7 17.3"/>
+                        <path d="M51.6 51.6 L46.7 46.7"/>
+                        <path d="M12.4 51.6 L17.3 46.7"/>
+                        <path d="M12.4 12.4 L17.3 17.3"/>
+                    </g>
+                    <path d="M25 19 Q35 16 38 25 Q40 30 37.5 35 L39 42 L34.5 42 L33 37 Q27 39.5 24 34.5 Q20 31 20.5 26 Q21 21 25 19 Z"
+                          fill="url(#loginLogoGradient)"/>
+                    <circle cx="31" cy="26" r="1.6" fill="#050505"/>
+                </svg>
+            </div>
+
+            <h1 class="login-title">J.A.R.V.I.S.</h1>
+            <div class="login-subtitle">HUD SYSTEM</div>
+            <div class="login-tagline">A.I. ASSISTANCE</div>
+
+            <div class="login-status">
+                <span class="status-dot-pill"></span>
+                <span>JARVIS ONLINE</span>
+            </div>
+
+            <form class="login-form" id="loginForm" autocomplete="on">
+                <input type="text" id="loginUsername" class="login-input" placeholder="USERNAME" autocomplete="username" required>
+                <input type="password" id="loginPassword" class="login-input" placeholder="PASSWORD" autocomplete="current-password" required>
+                <div class="login-error" id="loginError" hidden></div>
+                <button type="submit" class="login-button" id="loginButton">LOGIN</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="login.js"></script>
+</body>
+</html>

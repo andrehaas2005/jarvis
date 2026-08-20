@@ -102,6 +102,10 @@ class JARVISInterface {
             || crypto.randomUUID();
         sessionStorage.setItem('jarvis-presence-id', this.presenceSessionId);
         this.presenceValue = document.getElementById('presenceValue');
+
+        // Quem está logado (SCRUM-56) — ver checkAuthSession()/renderLoggedInUser() mais abaixo.
+        this.topbarUserName = document.getElementById('topbarUserName');
+        this.topbarLogout = document.getElementById('topbarLogout');
         this.conversationStartedAt = null;
         this.messageCount = 0;
         this.durationTimerId = null;
@@ -155,6 +159,12 @@ class JARVISInterface {
         this.startSystemAnimations();
         this.syncVisualizerModeButton();
         this.syncTopbarStatus();
+
+        // Login (SCRUM-56) — o guard em <head> do index.html já garantiu que existe algum
+        // token salvo antes de chegar aqui; isso só confirma que ele ainda é válido (não
+        // expirou) e mostra o nome de quem está logado.
+        this.renderLoggedInUser();
+        this.checkAuthSession();
 
         this.updateWorldClocks();
         setInterval(() => this.updateWorldClocks(), 30000);
@@ -753,6 +763,46 @@ class JARVISInterface {
         }
     }
 
+    // Mostra o nome de quem logou (salvo no login, ver login.js) — sem chamada ao backend,
+    // só lê o que já foi guardado no localStorage.
+    renderLoggedInUser() {
+        const raw = localStorage.getItem('jarvis-auth-user');
+        if (!raw || !this.topbarUserName) return;
+        try {
+            const user = JSON.parse(raw);
+            this.topbarUserName.textContent = user.name || user.username || '';
+        } catch (error) {
+            console.warn('Não deu pra ler o usuário logado:', error.message);
+        }
+    }
+
+    // Confirma que o token salvo ainda é válido (não expirou) — se não for, limpa a sessão e
+    // manda pra login.html. O guard síncrono em <head> do index.html só checa "existe token
+    // salvo", não se ele ainda vale; essa checagem completa. Roda em segundo plano, não trava
+    // o carregamento do HUD.
+    async checkAuthSession() {
+        const token = localStorage.getItem('jarvis-auth-token');
+        if (!token) {
+            window.location.replace('login.html');
+            return;
+        }
+        try {
+            const response = await fetch(`${JARVIS_BACKEND_URL}/auth/me`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!response.ok) this.logout();
+        } catch (error) {
+            // Backend fora do ar não é motivo pra deslogar — só loga o aviso e segue.
+            console.warn('Não deu pra validar a sessão agora:', error.message);
+        }
+    }
+
+    logout() {
+        localStorage.removeItem('jarvis-auth-token');
+        localStorage.removeItem('jarvis-auth-user');
+        window.location.replace('login.html');
+    }
+
     // ------------------------------------------------------------------
     // Rotina do primeiro contato do dia (clima + previsão de chuva + agenda)
     // ------------------------------------------------------------------
@@ -823,6 +873,11 @@ class JARVISInterface {
     }
 
     setupEventListeners() {
+        // Sair (SCRUM-56) — limpa a sessão salva e volta pro login.
+        if (this.topbarLogout) {
+            this.topbarLogout.addEventListener('click', () => this.logout());
+        }
+
         // Clique no botão liga/desliga a conversa com o agente ElevenLabs
         this.voiceButton.addEventListener('click', () => {
             this.toggleConversation();
