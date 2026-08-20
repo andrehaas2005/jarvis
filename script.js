@@ -54,6 +54,7 @@ class JARVISInterface {
         this.visionLookBtn = document.getElementById('visionLookBtn');
         this.visionCaptureCanvas = document.getElementById('visionCaptureCanvas');
         this.visionStream = null;
+        this.visionLookBusy = false; // trava contra chamadas sobrepostas de lookAtCamera()
         this.topbarFullscreen = document.getElementById('topbarFullscreen');
         this.topbarFullscreenIcon = document.getElementById('topbarFullscreenIcon');
         this.topbarFullscreenLabel = document.getElementById('topbarFullscreenLabel');
@@ -1070,33 +1071,65 @@ class JARVISInterface {
     // quando disparado pela sua própria fala (ver maybeAutoLook), usamos a pergunta que você
     // realmente fez, pra resposta ficar mais natural.
     async lookAtCamera(promptText = 'Descreva o que você está vendo agora pela câmera.') {
-        if (!this.visionStream || !this.conversation) return;
-
-        const video = this.visionVideo;
-        const canvas = this.visionCaptureCanvas;
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
-        const ctx = canvas.getContext('2d');
-        // Espelha a captura pra bater com a visualização (senão a mão esquerda de quem está na
-        // câmera aparece do lado direito da imagem, e o Jarvis descreve o lado errado).
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
-        if (!blob) {
-            this.pushLog('[ERRO] Não consegui capturar a imagem da câmera');
+        // Guarda de diagnóstico (achado real: 1ª chamada de uma conversa funciona, chamadas
+        // seguintes silenciosamente não faziam nada — sem log nenhum, nem no console nem no
+        // painel). Cada saída antecipada agora deixa rastro, pra não repetir a investigação às
+        // cegas da próxima vez.
+        if (!this.visionStream || !this.conversation) {
+            console.warn('lookAtCamera: abortado — sem stream de câmera ou conversa ativa', {
+                hasStream: !!this.visionStream,
+                hasConversation: !!this.conversation,
+            });
             return;
         }
+        // Trava simples: se uma captura anterior ainda está em voo (upload/análise em
+        // andamento) e o gatilho de voz disparar de novo antes dela terminar, a segunda chamada
+        // era descartada silenciosamente ao mexer no mesmo <canvas> no meio do processo. Agora
+        // ela só avisa e sai, em vez de tentar (e falhar sem log) por cima da primeira.
+        if (this.visionLookBusy) {
+            console.warn('lookAtCamera: ignorado — já existe uma captura em andamento');
+            this.pushLog('[VISÃO] Ainda processando a imagem anterior, aguarde...');
+            return;
+        }
+        this.visionLookBusy = true;
 
-        this.pushLog('[VISÃO] Enviando imagem da câmera para o Jarvis...');
         try {
+            const video = this.visionVideo;
+            const track = this.visionStream.getVideoTracks()[0];
+            if (track && track.readyState !== 'live') {
+                console.warn('lookAtCamera: abortado — track de vídeo não está mais "live"', {
+                    readyState: track.readyState,
+                });
+                this.pushLog('[ERRO] Câmera parou de transmitir — reative o SHARE VISION');
+                return;
+            }
+
+            const canvas = this.visionCaptureCanvas;
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            const ctx = canvas.getContext('2d');
+            // Espelha a captura pra bater com a visualização (senão a mão esquerda de quem está
+            // na câmera aparece do lado direito da imagem, e o Jarvis descreve o lado errado).
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+            if (!blob) {
+                console.warn('lookAtCamera: canvas.toBlob() retornou null — imagem não capturada');
+                this.pushLog('[ERRO] Não consegui capturar a imagem da câmera');
+                return;
+            }
+
+            this.pushLog('[VISÃO] Enviando imagem da câmera para o Jarvis...');
             const { fileId } = await this.conversation.uploadFile(blob);
             await this.conversation.sendMultimodalMessage({ text: promptText, fileId });
             this.pushLog('[VISÃO] Imagem enviada — aguardando análise');
         } catch (error) {
             console.error('Error sending camera frame:', error);
             this.pushLog(`[ERRO] Falha ao enviar imagem: ${error.message || error}`);
+        } finally {
+            this.visionLookBusy = false;
         }
     }
 
