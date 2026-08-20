@@ -30,6 +30,25 @@ uvicorn app.main:app --reload --port 8000
 
 - Healthcheck: http://localhost:8000/health
 - Docs automáticas: http://localhost:8000/docs
+- Signed URL da ElevenLabs: http://localhost:8000/elevenlabs/signed-url
+
+## ElevenLabs — Signed URL (fix SCRUM-48)
+
+O agente conecta anonimamente via `agentId` (sem API key) para voz/texto,
+mas `conversation.uploadFile()` — usado pela visão da câmera — respondia
+**403** nesse modo. A causa é a ElevenLabs exigir uma sessão autenticada
+para upload de arquivo; conexão anônima não tem permissão.
+
+A correção: o backend guarda a `ELEVENLABS_API_KEY` (nunca vai para o
+frontend) e expõe `GET /elevenlabs/signed-url`, que pede à ElevenLabs uma
+signed URL de curta duração. O frontend busca essa URL antes de abrir a
+sessão e usa `signedUrl` em vez de `agentId` no `Conversation.startSession`.
+
+No `.env`, preencha:
+```
+ELEVENLABS_API_KEY=sk_...        # painel ElevenLabs → Profile → API Keys
+ELEVENLABS_AGENT_ID=agent_...    # já usado hoje no script.js
+```
 
 ## Estrutura
 
