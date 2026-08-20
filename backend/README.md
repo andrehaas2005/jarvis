@@ -41,9 +41,13 @@ backend/
 │   ├── logging_config.py   # Logging estruturado em JSON
 │   └── retry.py            # Retry + idempotência (fix SCRUM-45/46)
 ├── mcp_servers/
-│   └── gmail/               # MCP Server do Gmail (SCRUM-14)
-│       ├── gmail_client.py  # wrapper OAuth2 + Gmail API
-│       └── server.py        # tools MCP: send_email, list_emails, read_email
+│   ├── google_auth.py        # OAuth2 compartilhado (Gmail + Calendar)
+│   ├── gmail/                # MCP Server do Gmail (SCRUM-14)
+│   │   ├── gmail_client.py   # wrapper Gmail API
+│   │   └── server.py         # tools MCP: send_email, list_emails, read_email
+│   └── calendar/             # MCP Server do Google Calendar (SCRUM-15)
+│       ├── calendar_client.py # wrapper Calendar API
+│       └── server.py          # tools MCP: create_event, list_events, get_event
 ├── requirements.txt
 └── .env.example
 ```
@@ -74,6 +78,34 @@ Expõe 3 ferramentas MCP:
 
 ```bash
 python -m mcp_servers.gmail.server
+```
+
+## MCP Server — Google Calendar (SCRUM-15)
+
+Expõe 3 ferramentas MCP:
+
+- **`create_event(summary, start, end, idempotency_key, description, attendees)`**
+  — cria evento (`start`/`end` em ISO 8601). A `idempotency_key` é
+  obrigatória e passa pelo `app.retry` do SCRUM-16: retry/timeout do
+  agente de voz não cria eventos duplicados (fix do SCRUM-47 — Calendar
+  Agent intermitente).
+- **`list_events(time_min, time_max, max_results)`** — lista eventos em um período.
+- **`get_event(event_id)`** — lê os detalhes de um evento específico.
+
+### Configurar credenciais do Calendar
+
+Mesmo fluxo do Gmail (mesmo projeto no Google Cloud Console funciona para
+os dois — só ative também a Calendar API):
+
+```
+CALENDAR_CREDENTIALS_PATH=/caminho/para/credentials.json
+CALENDAR_TOKEN_PATH=/caminho/para/token.json
+```
+
+### Rodar standalone (stdio)
+
+```bash
+python -m mcp_servers.calendar.server
 ```
 
 ## Retry + Idempotência
