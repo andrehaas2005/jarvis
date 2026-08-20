@@ -61,7 +61,7 @@ Total Issues: 41 (SCRUM-8 a SCRUM-50)
 | SCRUM-15 | MCP Server Calendar (`create_event`, `list_events`, `get_event`) + `google_auth.py` compartilhado | **Concluído** |
 | SCRUM-48 | Endpoint `GET /elevenlabs/signed-url` (backend) + `script.js` usando `signedUrl` (frontend) | **Concluído** |
 | SCRUM-50 *(novo)* | Deploy em produção — Dockerfile, VPS Hostinger, Traefik, DNS | **Concluído** |
-| SCRUM-49 *(novo)* | MCP Server Contacts/Google People API (`search_contact`, `add_or_update_contact`) — migrado de Airtable sessão 3, usa Contatos do Google reais, sem custo | Em andamento |
+| SCRUM-49 *(novo)* | MCP Server Contacts/Google People API (`search_contact`, `add_or_update_contact`) — migrado de Airtable sessão 3, usa Contatos do Google reais, sem custo. Deployado e testado em produção (230 contatos reais) | Em andamento *(falta integrar com create_event)* |
 
 **🌐 Produção:** https://jarvis-api.andre.haas.nom.br — `GET /health` e `GET /elevenlabs/signed-url` testados reais via HTTPS, 200 OK.
 
@@ -70,7 +70,7 @@ Total Issues: 41 (SCRUM-8 a SCRUM-50)
 - `send_email`: email real enviado + 2ª chamada com mesma `idempotency_key` **não duplicou** (mesmo `message_id`)
 - `create_event`: evento real criado na agenda + 2ª chamada **não duplicou** (mesmo `event_id`)
 - ElevenLabs signed-url: testado real em produção, retornou `wss://api.elevenlabs.io/...` válido
-- Contacts (Google People API, sessão 3): código migrado de Airtable pra usar os Contatos reais do Google, ainda não testado com dados reais — falta ativar a **People API** no Cloud Console e autorizar o escopo `contacts` no primeiro uso (local e no servidor)
+- Contacts (Google People API, sessão 3): migrado de Airtable, **testado real** — 230 contatos retornados via `people.connections.list` local, PR #9 mergeado, deployado em produção (token copiado, `.env` atualizado, `git pull` + rebuild do `jarvis-backend`, `/health` OK). Falta só o teste de `search_contact`/`add_or_update_contact` ponta a ponta com um nome real
 
 ### 🖥️ Infraestrutura de produção (VPS Hostinger, descoberta+configurada nesta sessão)
 - **Servidor:** `srv1068805.hstgr.cloud` (IP `72.61.131.105`), já hospeda n8n, AgentOS e outros projetos pessoais via Docker Compose (`/root/docker-compose.yml` **no servidor**, fora deste repo)
@@ -90,10 +90,9 @@ Total Issues: 41 (SCRUM-8 a SCRUM-50)
 Os primeiros PRs desta sessão foram criados empilhados (cada um com base no anterior). Ao mergear no GitHub, **apenas os PRs cuja base era `main` de fato atualizaram `main`** — os PRs "do meio" da pilha ficaram mergeados só no branch pai. Foi preciso `git merge origin/<branch-da-ponta-da-pilha>` manualmente para trazer tudo. **Da próxima vez:** PRs não-empilhados (todos com base `main` direto) evitam esse problema — foi o que usamos para o SCRUM-50 (deploy) e funcionou sem esse cuidado extra.
 
 ### ⚠️ Pendências restantes
-1. **Ativar a People API** no Google Cloud Console (mesmo projeto do Gmail/Calendar) e rodar a primeira autorização OAuth (escopo `contacts`) local e no servidor — sem planilha, sem cadastro manual, usa os Contatos reais do Google
+1. ~~Ativar a People API + autorizar OAuth~~ — **feito** (local e produção)
 2. Conectar `search_contact` (SCRUM-49) ao fluxo de `create_event` (SCRUM-15) no orquestrador — hoje existem lado a lado, ainda não integrados
 3. **SCRUM-17** — remover n8n de vez (só depois disso SCRUM-45/46/47 fecham como Concluído)
-4. Depois de autorizar no servidor, rodar `docker compose up -d --build jarvis-backend` de novo (comando documentado em `backend/README.md`)
 
 ---
 
@@ -132,10 +131,9 @@ Deploy bem-sucedido em PRODUÇÃO
 ## 📊 Próximas Ações (Ordem de Prioridade)
 
 ### IMEDIATO (Sprint 1) — retomar por aqui
-1. **Ativar People API + autorizar OAuth (escopo `contacts`)** local e no servidor — depois rodar `docker compose up -d --build jarvis-backend` no servidor de novo
-2. **Conectar SCRUM-49 → SCRUM-15**: orquestrador chama `search_contact` antes de `create_event` quando attendee for nome (fecha SCRUM-47 de vez)
-3. **SCRUM-17** — Remover n8n / migrar de vez (só depois disso os SCRUM-45/46/47 fecham como Concluído)
-4. Testar o HUD (frontend) apontando pro backend de produção (hoje `script.js` usa `JARVIS_BACKEND_URL = 'http://localhost:8000'` — trocar pra `https://jarvis-api.andre.haas.nom.br` quando for usar em produção)
+1. **Conectar SCRUM-49 → SCRUM-15**: orquestrador chama `search_contact` antes de `create_event` quando attendee for nome (fecha SCRUM-47 de vez)
+2. **SCRUM-17** — Remover n8n / migrar de vez (só depois disso os SCRUM-45/46/47 fecham como Concluído)
+3. Testar o HUD (frontend) apontando pro backend de produção (hoje `script.js` usa `JARVIS_BACKEND_URL = 'http://localhost:8000'` — trocar pra `https://jarvis-api.andre.haas.nom.br` quando for usar em produção)
 
 ### CURTO PRAZO (Fim Sprint 1)
 5. **SCRUM-20-23** — Settings Page
