@@ -1,8 +1,8 @@
 # 📋 JARVIS Roadmap - Sessão de Continuidade
 
 **Data de Criação:** 2026-08-19  
-**Última Atualização:** 2026-08-19 (sessão 2 — backend Python iniciado)  
-**Status Geral:** Sprint 1 Ativo ✅ — Backend Python em construção
+**Última Atualização:** 2026-08-19 (sessão 2 — backend Python mergeado em main, testado com dados reais)  
+**Status Geral:** Sprint 1 Ativo ✅ — Backend Python rodando local com credenciais reais, aguardando deploy em produção
 
 ---
 
@@ -21,8 +21,10 @@ Total Issues: 40 (SCRUM-8 a SCRUM-49)
 ├── 36 Histórias (SCRUM-14 a SCRUM-49)
 │   ├── 15 no Sprint 1 original + SCRUM-49 (novo, criado sessão 2)
 │   └── 20 no Backlog (FASE 2 + FASE 3)
-├── 5 tickets com código implementado nesta sessão (não mergeado): 14, 15, 16, 45/46/47 (diagnóstico), 48, 49
-└── 0 Concluídos (nada foi mergeado/deployado ainda)
+├── 5 tickets em Em Deploy: 14, 15, 16, 48, 49 (código mergeado em main, falta deploy real)
+├── 2 tickets em Em análise: 45, 46 (fix mergeado, falta remover n8n pra fechar)
+├── 1 ticket em Em andamento: 47 (falta integrar contact lookup)
+└── 0 Concluídos (nada foi deployado em produção ainda)
 ```
 
 ---
@@ -51,28 +53,35 @@ Total Issues: 40 (SCRUM-8 a SCRUM-49)
 
 **Decisão:** SCRUM-16 mudou de Node.js para **Python/FastAPI** — usuário está estudando Python e quer aplicar no projeto.
 
-### ✅ Backend criado em `/backend` (branches separados por ticket, ainda não mergeados em main)
+### ✅ Tudo mergeado em `main` — repositório limpo (branches feature deletados)
 
-| Ticket | Branch | O que tem | Status Jira |
-|---|---|---|---|
-| SCRUM-16 | `feature/SCRUM-16-backend-python` | FastAPI app, config, logging JSON, **`app/retry.py`** (retry + idempotência — testado) | Em andamento |
-| SCRUM-14 | `feature/SCRUM-14-mcp-gmail` | MCP Server Gmail (`send_email`, `list_emails`, `read_email`) — idempotência testada com mock | Em andamento |
-| SCRUM-15 | `feature/SCRUM-15-mcp-calendar` | MCP Server Calendar (`create_event`, `list_events`, `get_event`) + `google_auth.py` compartilhado | Em andamento |
-| SCRUM-48 | `feature/SCRUM-48-elevenlabs-signed-url` | Endpoint `GET /elevenlabs/signed-url` (backend) + `script.js` usando `signedUrl` (frontend, commit isolado em `feature/hud-3d-voz-gestos`) | Em análise |
-| SCRUM-49 *(novo)* | `feature/SCRUM-49-mcp-contacts` | MCP Server Contacts/Airtable (`search_contact`, `add_or_update_contact`) — achado durante diagnóstico do SCRUM-47 | Em andamento |
+| Ticket | O que tem | Status Jira |
+|---|---|---|
+| SCRUM-16 | FastAPI app, config, logging JSON, **`app/retry.py`** (retry + idempotência) | Em Deploy |
+| SCRUM-14 | MCP Server Gmail (`send_email`, `list_emails`, `read_email`) | Em Deploy |
+| SCRUM-15 | MCP Server Calendar (`create_event`, `list_events`, `get_event`) + `google_auth.py` compartilhado | Em Deploy |
+| SCRUM-48 | Endpoint `GET /elevenlabs/signed-url` (backend) + `script.js` usando `signedUrl` (frontend) | Em Deploy |
+| SCRUM-49 *(novo, criado nesta sessão)* | MCP Server Contacts/Airtable (`search_contact`, `add_or_update_contact`) | Em Deploy |
 
-**Todos os MCP Servers testados com mock** (sem credenciais reais ainda) — imports OK, tools registradas, idempotência validada end-to-end.
+**Testado com credenciais e dados REAIS** (não mais mock):
+- OAuth Google real (Gmail + Calendar) — `backend/.credentials/` local, tokens salvos
+- `send_email`: email real enviado + 2ª chamada com mesma `idempotency_key` **não duplicou** (mesmo `message_id`)
+- `create_event`: evento real criado na agenda + 2ª chamada **não duplicou** (mesmo `event_id`)
+- Contacts (Airtable) e ElevenLabs (signed URL): ainda só testados com mock — faltam as credenciais reais
 
 ### 🔎 Diagnóstico dos bugs críticos (investigando os JSONs do n8n)
-- **SCRUM-45/46** (email 8x / atomicidade): causa raiz = confirmação de envio garantida só por **prompt engineering** no `Email Agent Tool.json`, sem nenhuma camada determinística abaixo do LLM. Fix já implementado no `app/retry.py` (SCRUM-16) + SCRUM-14.
-- **SCRUM-47** (Calendar intermitente): causa raiz real é **diferente** do suposto — o `Calendar Agent Tool.json` não tem lookup de nome→email de attendee, depende do LLM alucinar. Gerou o novo ticket **SCRUM-49**.
-- **Todos os 4 bugfixes ficam "Em análise"/"Em andamento" e só fecham de vez após a migração completa do n8n (SCRUM-17, ainda não feita)** — o código novo resolve a causa raiz, mas o n8n antigo continua rodando em produção até lá.
+- **SCRUM-45/46** (email 8x / atomicidade): causa raiz = confirmação de envio garantida só por **prompt engineering** no `Email Agent Tool.json`, sem nenhuma camada determinística abaixo do LLM. Fix testado com envio real (ver acima).
+- **SCRUM-47** (Calendar intermitente): causa raiz real é **diferente** do suposto — o `Calendar Agent Tool.json` não tem lookup de nome→email de attendee, depende do LLM alucinar. Gerou o novo ticket **SCRUM-49**. Parte de idempotência já testada real; falta integrar o lookup de contato.
+- **SCRUM-45/46/47 continuam "Em análise"/"Em andamento" e só fecham como Concluído após a migração completa do n8n (SCRUM-17, ainda não feita)** — o n8n antigo continua rodando em produção até lá.
 
-### ⚠️ Pendências para fechar os tickets
-1. Preencher credenciais reais no `backend/.env` (Google OAuth para Gmail/Calendar, API key do Airtable, API key da ElevenLabs) — ver `backend/.env.example` e `backend/README.md`
+### ⚠️ Cuidado ao mergear PRs empilhados no GitHub
+Os PRs desta sessão foram criados empilhados (cada um com base no anterior, não direto em `main`) para manter granularidade por ticket. Ao mergear no GitHub, **apenas os PRs cuja base era `main` de fato atualizaram `main`** — os PRs "do meio" da pilha (com base em outro branch feature) ficaram mergeados só no branch pai, não em `main`. Foi preciso `git merge origin/<branch-da-ponta-da-pilha>` manualmente para trazer tudo. **Da próxima vez:** ou mergear só o PR da ponta da pilha (ele já carrega tudo), ou usar PRs não-empilhados (todos com base `main` direto) se quiser mergear em qualquer ordem sem esse cuidado.
+
+### ⚠️ Pendências para fechar os tickets de vez
+1. Preencher `AIRTABLE_API_KEY`/`AIRTABLE_BASE_ID` e `ELEVENLABS_API_KEY` reais no `.env` (Google já está configurado e testado)
 2. Conectar `search_contact` (SCRUM-49) ao fluxo de `create_event` (SCRUM-15) no orquestrador — hoje existem lado a lado, ainda não integrados
-3. Nenhum branch foi mergeado em `main` ainda — todos aguardando revisão/teste com credenciais reais
-4. `feature/hud-3d-voz-gestos` também não foi pusheado (3 commits locais à frente do origin)
+3. **SCRUM-17** — remover n8n de vez (só depois disso SCRUM-45/46/47 fecham como Concluído)
+4. Deploy real em produção do backend (hoje só roda local) — depois disso SCRUM-14/15/16/48/49 fecham como Concluído
 
 ---
 
@@ -111,16 +120,14 @@ Deploy bem-sucedido em PRODUÇÃO
 ## 📊 Próximas Ações (Ordem de Prioridade)
 
 ### IMEDIATO (Sprint 1) — retomar por aqui
-1. **Preencher credenciais reais** em `backend/.env` (Google OAuth, Airtable, ElevenLabs) — sem isso nenhum MCP Server foi testado de ponta a ponta, só com mock
+1. **Preencher `AIRTABLE_API_KEY`/`AIRTABLE_BASE_ID` e `ELEVENLABS_API_KEY`** no `backend/.env` (Google já testado real) — ver `backend/README.md`
 2. **Conectar SCRUM-49 → SCRUM-15**: orquestrador chama `search_contact` antes de `create_event` quando attendee for nome (fecha SCRUM-47 de vez)
 3. **SCRUM-17** — Remover n8n / migrar de vez (só depois disso os SCRUM-45/46/47 fecham como Concluído)
-4. Revisar e mergear os 5 branches de backend em `main` (nenhum foi mergeado ainda — ver tabela na seção "SESSÃO 2" acima)
-5. Push de `feature/hud-3d-voz-gestos` (3 commits locais à frente do origin)
+4. **Deploy real em produção** do backend (hoje só roda local via `uvicorn app.main:app --reload`) — só depois disso SCRUM-14/15/16/48/49 fecham como Concluído
 
 ### CURTO PRAZO (Fim Sprint 1)
-6. **SCRUM-20-23** — Settings Page
-7. **SCRUM-24-25** — Sistema de Memória (Nível 1-2)
-8. Testar o HUD end-to-end com o backend Python no ar (`uvicorn app.main:app --reload`) + credenciais reais
+5. **SCRUM-20-23** — Settings Page
+6. **SCRUM-24-25** — Sistema de Memória (Nível 1-2)
 
 ---
 
