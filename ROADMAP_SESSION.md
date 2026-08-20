@@ -149,6 +149,19 @@ Decisões do usuário: radar (topo-direita) escondido no mobile — decorativo; 
 
 Testado real: 360px/375px/768px/1440px, sem overflow em nenhum, desktop sem mudança visual.
 
+### ✅ SCRUM-55 — contador de presença (sessões ativas do HUD)
+Pergunta do usuário: dá pra saber quantas pessoas estão com o HUD aberto? `presence.py`: heartbeat em memória por `session_id` (gerado com `crypto.randomUUID()` por aba), só quando `document.visibilityState === 'visible'` (não conta abas em background). Exposto no painel de check-in ao lado de email/agenda/contatos.
+
+### ✅ SCRUM-56 — login do HUD (primeiro passo do sistema de perfis)
+Usuário perguntou se dava pra identificar quem fala por voz (biometria) — descartado por ser dado biométrico sensível (LGPD), decisão: login tradicional. Confirmado com o usuário: **ElevenLabs e Anthropic continuam únicos do sistema**; Gmail/Calendar/Contacts ficam **por pessoa** — mas essa separação é fase futura, essa sessão cobriu só a tela de login + auth básica.
+
+- **`backend/app/auth.py`** (novo): SQLite local (`data/jarvis.db`, fora do git), hash PBKDF2-HMAC-SHA256 (stdlib, sem dependência nova), token assinado por HMAC (14 dias, sem `pyjwt`). Usuário seed (admin): `andrehaas` / André Haas / "Senhor André" — senha inicial `123456`.
+- **`POST /auth/login`** e **`GET /auth/me`** em `main.py`; `init_db()` roda no startup e semeia o admin se não existir.
+- **Frontend:** `login.html`/`login.css`/`login.js` seguindo o mockup fornecido pelo usuário (logo engrenagem+perfil, "J.A.R.V.I.S.", "HUD SYSTEM", "A.I. ASSISTANCE", "JARVIS ONLINE", campos USERNAME/PASSWORD) + `favicon.svg` com o mesmo ícone. `index.html` redireciona pra `login.html` se não houver token válido no `localStorage`; topbar do HUD mostra o nome de quem logou + botão de logout.
+- Testado real (curl + browser, local): login errado → 401; login certo → token + dados do usuário; `/auth/me` valida token; logout limpa `localStorage` e volta pro login; mobile (375px) sem overflow.
+- **Fora de escopo desta etapa** (fica pra depois): página de configuração pra criar/editar usuários, credenciais Google separadas por pessoa, proteção dos endpoints do orquestrador com o token (hoje só a navegação client-side do HUD é protegida).
+- **Pendente de deploy:** volume Docker pro `backend/data/` no servidor (`/root/jarvis-data:/app/data` no `docker-compose.yml`), senão o banco de usuários é apagado a cada rebuild do container.
+
 ---
 
 ## 🔄 Workflow de Desenvolvimento

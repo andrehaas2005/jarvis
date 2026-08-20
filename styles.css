@@ -121,6 +121,42 @@ body {
     flex-shrink: 0;
 }
 
+/* Quem está logado (SCRUM-56) — ver topbarLogout/renderLoggedInUser em script.js. */
+.topbar-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: 16px;
+    padding-left: 16px;
+    border-left: 1px solid rgba(0, 212, 255, 0.25);
+}
+
+.topbar-user-name {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 1px;
+    color: var(--hud-text-dim);
+    white-space: nowrap;
+}
+
+.topbar-logout {
+    background: none;
+    border: 1px solid rgba(255, 60, 60, 0.4);
+    border-radius: 6px;
+    color: var(--hud-error);
+    width: 26px;
+    height: 26px;
+    font-size: 0.9rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.topbar-logout:hover {
+    background: rgba(255, 60, 60, 0.15);
+    box-shadow: 0 0 8px rgba(255, 60, 60, 0.4);
+}
+
 .topbar-status {
     display: flex;
     align-items: center;

@@ -11,6 +11,7 @@ backend/.venv/
 backend/__pycache__/
 backend/**/__pycache__/
 backend/*.db
+backend/data/
 *.pyc
 
 # Música de fundo local (script.js → BACKGROUND_MUSIC_SRC). Nunca comitar: são faixas com direitos

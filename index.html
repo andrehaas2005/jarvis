@@ -4,8 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JARVIS - Sistema de Inteligência Artificial</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <!-- Guarda de login (SCRUM-56): roda antes de qualquer coisa renderizar — sem token
+         salvo, manda pra login.html direto, sem piscar o HUD antes. Validação completa
+         (token expirado etc.) acontece depois, já com a página carregada, em script.js. -->
+    <script>
+        if (!localStorage.getItem('jarvis-auth-token')) {
+            window.location.replace('login.html');
+        }
+    </script>
 </head>
 <body>
     <div class="hud-container">
@@ -18,6 +27,12 @@
                 <span class="topbar-brand-chevron">&gt;_</span>
                 <span class="topbar-brand-name">JARVIS</span>
                 <span class="topbar-brand-sub">HUD SYSTEM</span>
+            </div>
+            <!-- Quem está logado (SCRUM-56) + sair — preenchido em script.js a partir do
+                 usuário salvo no login (localStorage), sem chamada extra à toa. -->
+            <div class="topbar-user" id="topbarUser">
+                <span class="topbar-user-name" id="topbarUserName"></span>
+                <button class="topbar-logout" id="topbarLogout" title="Sair">&#9099;</button>
             </div>
             <div class="topbar-actions">
                 <div class="wake-phrases-wrapper">

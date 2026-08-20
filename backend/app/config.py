@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # Painel de créditos (HUD) — Admin API key, só leitura de uso/custo.
     anthropic_admin_api_key: str | None = None
 
+    # Login do HUD (SCRUM-56) — token assinado (HMAC), sem sessão em memória.
+    jarvis_auth_secret: str = "troque-isso-no-.env-em-producao"
+    jarvis_db_path: str = "data/jarvis.db"
+
 
 @lru_cache
 def get_settings() -> Settings:
