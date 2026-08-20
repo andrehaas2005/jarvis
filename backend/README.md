@@ -53,7 +53,7 @@ cd /root/jarvis-repo && git pull origin main
 cd /root && docker compose up -d --build jarvis-backend
 ```
 
-Credenciais reais (Google OAuth tokens, Airtable, ElevenLabs) ficam em
+Credenciais reais (Google OAuth tokens, ElevenLabs) ficam em
 `/root/.env` e `/root/jarvis-credentials/` no servidor — nunca neste repo.
 `jarvis.andre.haas.nom.br` já está ocupado por outro serviço (ferramenta
 de gerenciamento da própria Hostinger), por isso o subdomínio é
@@ -94,8 +94,8 @@ backend/
 │   ├── calendar/              # MCP Server do Google Calendar (SCRUM-15)
 │   │   ├── calendar_client.py # wrapper Calendar API
 │   │   └── server.py          # tools MCP: create_event, list_events, get_event
-│   └── contacts/              # MCP Server de Contacts / Airtable (SCRUM-49)
-│       ├── contacts_client.py # wrapper Airtable REST API
+│   └── contacts/              # MCP Server de Contacts / Google People API (SCRUM-49)
+│       ├── contacts_client.py # wrapper Google People API (Contatos do Google)
 │       └── server.py          # tools MCP: search_contact, add_or_update_contact
 ├── requirements.txt
 └── .env.example
@@ -157,7 +157,7 @@ CALENDAR_TOKEN_PATH=/caminho/para/token.json
 python -m mcp_servers.calendar.server
 ```
 
-## MCP Server — Contacts / Airtable (SCRUM-49)
+## MCP Server — Contacts / Google People API (SCRUM-49)
 
 Nasceu do diagnóstico do SCRUM-47: o Calendar Agent do n8n não tinha nenhum
 jeito determinístico de resolver nome→email de um attendee. Expõe 2 ferramentas MCP:
@@ -171,16 +171,24 @@ O backend orquestrador deve chamar `search_contact` antes de
 `calendar.create_event` sempre que o attendee vier como nome em vez de
 email — fecha o SCRUM-47 de vez.
 
-### Configurar Airtable
+Usa a **Google People API** (os Contatos do Google, mesma agenda do Gmail/
+celular) em vez de Airtable ou uma planilha — sem cadastro duplicado, sem
+custo, mesma conta Google já usada pelo Gmail/Calendar (mesmo
+`credentials.json` funciona, só precisa autorizar o novo escopo na
+primeira execução).
 
-1. Gere um Personal Access Token em [airtable.com/create/tokens](https://airtable.com/create/tokens) com escopo `data.records:read` e `data.records:write` na base de contatos.
-2. Pegue o Base ID na URL da base (`https://airtable.com/appXXXXXXXXXXXXXX/...` — o `appXXXXXXXXXXXXXX` é o Base ID).
-3. No `.env`:
+### Configurar Google Contacts
+
+1. No mesmo projeto do Google Cloud Console usado pro Gmail/Calendar, ative a **People API**.
+2. No `.env`:
    ```
-   AIRTABLE_API_KEY=pat...
-   AIRTABLE_BASE_ID=appXXXXXXXXXXXXXX
-   AIRTABLE_TABLE_NAME=Sheet1
+   CONTACTS_CREDENTIALS_PATH=/caminho/para/credentials.json
+   CONTACTS_TOKEN_PATH=/caminho/para/contacts_token.json
    ```
+3. Na primeira execução, uma janela do navegador abre para autorizar o escopo `contacts` (leitura e escrita) — o token é salvo automaticamente para as próximas execuções.
+
+Não precisa cadastrar nada manualmente: `search_contact` já busca entre os
+seus contatos reais do Google.
 
 A tabela deve ter as colunas `Nome`, `Email`, `Telefone` (mesmo schema do `Contacts Agent Tool` do n8n).
 
