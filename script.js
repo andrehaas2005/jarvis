@@ -3,6 +3,10 @@
 // ID do agente ElevenLabs Conversational AI (painel da ElevenLabs → seu agente).
 const ELEVENLABS_AGENT_ID = 'agent_0401ktc7pg1xev08smgfd1t20m52';
 
+// Backend orquestrador (SCRUM-16). Usado para pedir a signed URL da ElevenLabs — ver
+// getElevenLabsSignedUrl() logo abaixo.
+const JARVIS_BACKEND_URL = 'http://localhost:8000';
+
 // Música de fundo tocada durante a conversa. O arquivo em si NÃO fica no git (ver .gitignore —
 // é conteúdo com direitos autorais, só existe na sua máquina). Pra trocar a faixa padrão, é só
 // substituir o arquivo em assets/music/background.mp3 por outro mp3/wav (mesmo nome). Pra testar
@@ -47,6 +51,9 @@ class JARVISInterface {
         this.visionLookBtn = document.getElementById('visionLookBtn');
         this.visionCaptureCanvas = document.getElementById('visionCaptureCanvas');
         this.visionStream = null;
+        this.topbarFullscreen = document.getElementById('topbarFullscreen');
+        this.topbarFullscreenIcon = document.getElementById('topbarFullscreenIcon');
+        this.topbarFullscreenLabel = document.getElementById('topbarFullscreenLabel');
         this.topbarGestures = document.getElementById('topbarGestures');
         this.gestureOverlay = document.getElementById('gestureOverlay');
         this.gestureCloseBtn = document.getElementById('gestureCloseBtn');
@@ -57,6 +64,11 @@ class JARVISInterface {
         this.gestureCanvas = null;
         this.conversation = null; // instância retornada por ElevenLabsClient.Conversation.startSession
         this.conversationActive = false;
+        // Guarda síncrona contra chamadas duplicadas a startConversation(): conversationActive só
+        // vira true dentro do onConnect (assíncrono), então sem isso duas chamadas próximas (ex.:
+        // frase de ativação + clique quase simultâneo) passam pela checagem antes da primeira
+        // terminar de conectar, abrindo DUAS sessões ao mesmo tempo — daí a voz saindo duplicada.
+        this.conversationStarting = false;
         this.currentMode = 'listening'; // 'listening' | 'speaking' — espelha onModeChange do SDK
         this.audioLevelLoopId = null;
 
@@ -744,11 +756,67 @@ class JARVISInterface {
                 if (this.gestureCanvas) this.gestureCanvas.createBox(80, 80);
             });
         }
+
+        // TELA CHEIA: botão na topbar + reage a ESC/F11 (o navegador sai do fullscreen sozinho
+        // nesses casos, então escutamos o evento em vez de confiar só no estado que setamos).
+        if (this.topbarFullscreen) {
+            this.topbarFullscreen.addEventListener('click', () => this.toggleFullscreen());
+        }
+        document.addEventListener('fullscreenchange', () => this.syncFullscreenButton());
+        this.syncFullscreenButton();
     }
 
     async toggleGestureCanvas() {
         if (this.gestureOverlay.hidden) await this.openGestureCanvas();
         else this.closeGestureCanvas();
+    }
+
+    // Entra/sai da tela cheia do navegador. Chamado pelo botão da topbar e pelo comando de voz
+    // (ver maybeHandleFullscreenCommand, disparado a partir da sua própria fala transcrita).
+    async setFullscreen(shouldBeFullscreen) {
+        try {
+            if (shouldBeFullscreen && !document.fullscreenElement) {
+                await document.documentElement.requestFullscreen();
+                this.pushLog('[SISTEMA] Tela cheia ativada');
+            } else if (!shouldBeFullscreen && document.fullscreenElement) {
+                await document.exitFullscreen();
+                this.pushLog('[SISTEMA] Tela cheia desativada');
+            }
+        } catch (error) {
+            console.error('Erro ao alternar tela cheia:', error);
+            this.pushLog('[ERRO] Não consegui alternar a tela cheia (o navegador pode ter bloqueado)');
+        }
+    }
+
+    toggleFullscreen() {
+        this.setFullscreen(!document.fullscreenElement);
+    }
+
+    // Mantém o botão (ícone/rótulo/estado "active") sincronizado com o estado real do navegador,
+    // já que ESC ou F11 saem do fullscreen sem passar pelo nosso botão.
+    syncFullscreenButton() {
+        if (!this.topbarFullscreen) return;
+        const isFullscreen = !!document.fullscreenElement;
+        this.topbarFullscreen.classList.toggle('active', isFullscreen);
+        if (this.topbarFullscreenIcon) this.topbarFullscreenIcon.textContent = isFullscreen ? '⛶' : '⛶';
+        if (this.topbarFullscreenLabel) this.topbarFullscreenLabel.textContent = isFullscreen ? 'TELA NORMAL' : 'TELA CHEIA';
+        this.topbarFullscreen.title = isFullscreen
+            ? "Voltar ao tamanho normal (ou diga 'Jarvis, sair da tela cheia')"
+            : "Tela cheia (ou diga 'Jarvis, tela cheia')";
+    }
+
+    // Frases faladas por você que pedem pra entrar ou sair da tela cheia. Chamado a cada
+    // transcrição sua (mesmo padrão do maybeAutoLook) — nada aqui depende de uma ferramenta do
+    // agente, é reconhecido localmente no navegador.
+    static FULLSCREEN_ON_REGEX = /tela\s*cheia|modo\s*tela\s*cheia|fullscreen/i;
+    static FULLSCREEN_OFF_REGEX = /(sair|sai|tirar|voltar)\s*(da|de)?\s*tela\s*cheia|tela\s*normal|modo\s*normal/i;
+
+    maybeHandleFullscreenCommand(message) {
+        if (JARVISInterface.FULLSCREEN_OFF_REGEX.test(message)) {
+            this.setFullscreen(false);
+        } else if (JARVISInterface.FULLSCREEN_ON_REGEX.test(message)) {
+            this.setFullscreen(true);
+        }
     }
 
     async openGestureCanvas() {
@@ -872,7 +940,7 @@ class JARVISInterface {
     // imagem no mesmo turno de voz — em vez disso, ao detectar uma dessas frases na sua fala,
     // mandamos a imagem logo em seguida como uma segunda mensagem, com a mesma pergunta.
     static VISION_TRIGGER_REGEX =
-        /o que (você|voce|vc) (est[áa]|t[áa]) vendo|o que (eu )?tenho na(s)? (minhas? )?m[ãa]os?|consegue me ver|voc[êe] me v[êe]|voc[êe] (me )?enxerga|d[áa] uma olhada|olh[ae] (a c[âa]mera|pra mim|para mim)|identifica (isso|esse objeto|este objeto)|que objeto [ée] esse|o que (você|voce|vc) enxerga/i;
+        /o que (você|voce|vc) (est[áa]|t[áa]) vendo|o que (eu )?tenho na(s)? (minhas? )?m[ãa]os?|consegue me ver|voc[êe] me v[êe]|voc[êe] (me )?enxerga|d[áa] uma olhada|olh[ae] (agora|a c[âa]mera|pra mim|para mim)|identifica (isso|esse objeto|este objeto)|que objeto [ée] esse|o que (você|voce|vc) enxerga/i;
 
     // Chamado a cada transcrição de fala sua (onMessage, role 'user'). Se a câmera estiver
     // compartilhada e a frase bater com um gatilho de visão, dispara lookAtCamera() sozinho.
@@ -883,6 +951,20 @@ class JARVISInterface {
         this.lookAtCamera(message);
     }
 
+    // Frases pra ligar/desligar o compartilhamento da câmera (SHARE VISION) por voz — mesma ideia
+    // do comando de tela cheia: reconhecido localmente na sua fala transcrita, sem passar por
+    // nenhuma ferramenta do agente.
+    static VISION_ON_REGEX = /liga(r)?\s*(a\s*)?c[âa]mera|ativa(r)?\s*(a\s*)?c[âa]mera|compartilh(a|ar)\s*(a\s*)?(vis[ãa]o|c[âa]mera)|share\s*vision/i;
+    static VISION_OFF_REGEX = /desliga(r)?\s*(a\s*)?c[âa]mera|desativa(r)?\s*(a\s*)?c[âa]mera|para(r)?\s*de\s*compartilhar\s*(a\s*)?(vis[ãa]o|c[âa]mera)/i;
+
+    maybeHandleVisionCommand(message) {
+        if (JARVISInterface.VISION_OFF_REGEX.test(message)) {
+            if (this.visionStream) this.stopVision();
+        } else if (JARVISInterface.VISION_ON_REGEX.test(message)) {
+            if (!this.visionStream) this.startVision();
+        }
+    }
+
     toggleConversation() {
         if (this.conversationActive) {
             this.stopConversation();
@@ -891,16 +973,55 @@ class JARVISInterface {
         }
     }
 
+    // Quando a conexão com o agente ElevenLabs cai por erro (rede, falha no n8n, no modelo etc.),
+    // o SDK simplesmente encerra a sessão — sem isso, o Jarvis "para de falar do nada" e você não
+    // sabe se foi um bug, se ele te ignorou, ou o quê. Aqui usamos a síntese de voz nativa do
+    // navegador (não a voz real da ElevenLabs, que já caiu junto com a conexão) só pra avisar em
+    // voz alta que algo quebrou, e o painel de log já mostra o motivo técnico de qualquer forma.
+    speakFallbackError(reason) {
+        this.pushLog(`[ERRO] Conexão caiu (${reason}) — avisando por voz de reserva`);
+        if (!('speechSynthesis' in window)) return;
+        try {
+            window.speechSynthesis.cancel(); // não empilha por cima de um aviso anterior
+            const utterance = new SpeechSynthesisUtterance(
+                'Desculpe, tive um erro interno e perdi a conexão. Pode tentar de novo.'
+            );
+            utterance.lang = 'pt-BR';
+            window.speechSynthesis.speak(utterance);
+        } catch (error) {
+            console.error('Falha na síntese de voz de reserva:', error);
+        }
+    }
+
+    // Pede ao backend (SCRUM-16) uma signed URL autenticada da ElevenLabs. Conectar direto com
+    // agentId funciona para voz/texto (agente público), mas conversation.uploadFile() — usado pela
+    // visão da câmera — respondia 403 nesse modo anônimo (fix SCRUM-48). Se o backend não estiver
+    // no ar, cai em `null`: a conversa continua funcionando normalmente por agentId, só a visão por
+    // câmera que não vai funcionar até o backend subir.
+    async getElevenLabsSignedUrl() {
+        try {
+            const response = await fetch(`${JARVIS_BACKEND_URL}/elevenlabs/signed-url`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const { signed_url } = await response.json();
+            return signed_url;
+        } catch (error) {
+            console.warn('Não foi possível obter signed URL do backend, usando agentId direto:', error);
+            this.pushLog('[AVISO] Backend indisponível — visão por câmera pode falhar (403)');
+            return null;
+        }
+    }
+
     // Inicia uma conversa real com o agente ElevenLabs via SDK (@elevenlabs/client).
     // Cada callback abaixo alimenta o painel lateral (.log-content) e o texto de status com o que
     // está realmente acontecendo — nada aqui é simulado.
     async startConversation() {
-        if (this.conversationActive || !window.ElevenLabsClient) {
+        if (this.conversationActive || this.conversationStarting || !window.ElevenLabsClient) {
             if (!window.ElevenLabsClient) {
                 this.pushLog('[ERRO] SDK da ElevenLabs ainda não carregou');
             }
             return;
         }
+        this.conversationStarting = true;
 
         this.stopWakeWordListener(); // libera o SpeechRecognition do navegador pra conversa em si
 
@@ -915,15 +1036,21 @@ class JARVISInterface {
             this.pushLog('[ERRO] Permissão de microfone negada');
             this.updateVoiceStatus('[ERRO] MICROFONE NEGADO');
             this.updateVoiceButtonState('idle');
+            this.conversationStarting = false;
             return;
         }
 
         this.pushLog('[REDE] Conectando ao agente JARVIS (ElevenLabs)...');
         this.updateVoiceStatus('CONECTANDO...');
 
+        // Signed URL autenticada quando o backend está disponível (habilita upload de imagem pela
+        // câmera — fix SCRUM-48); cai para agentId puro se o backend estiver fora do ar.
+        const signedUrl = await this.getElevenLabsSignedUrl();
+        const sessionTarget = signedUrl ? { signedUrl } : { agentId: ELEVENLABS_AGENT_ID };
+
         try {
             this.conversation = await window.ElevenLabsClient.Conversation.startSession({
-                agentId: ELEVENLABS_AGENT_ID,
+                ...sessionTarget,
                 // Rotina do primeiro contato do dia: clima real + previsão de chuva + agenda,
                 // injetada como variável dinâmica {{daily_briefing}} — usada na primeira mensagem
                 // do agente (configurada no painel da ElevenLabs). Nas próximas conversas do mesmo
@@ -932,6 +1059,7 @@ class JARVISInterface {
                     daily_briefing: this.getDailyBriefingVariable(),
                 },
                 onConnect: ({ conversationId }) => {
+                    this.conversationStarting = false;
                     this.conversationActive = true;
                     this.updateVoiceButtonState('listening');
                     this.updateVoiceStatus('JARVIS CONECTADO');
@@ -961,7 +1089,21 @@ class JARVISInterface {
                     this.syncTopbarStatus();
                     this.stopDurationTimer();
                     this.stopBackgroundMusic();
-                    this.startWakeWordListener(); // volta a escutar a frase de ativação
+                    // Se caiu por erro (não porque você ou o agente encerraram normalmente), o
+                    // Jarvis "simplesmente parou de falar" do seu ponto de vista — avisamos em voz
+                    // alta em vez de deixar isso só no painel de log.
+                    if (details?.reason === 'error') {
+                        this.speakFallbackError(details.message || 'motivo desconhecido');
+                        // Achado real (log do console): depois de um erro, religar a escuta de
+                        // ativação NA HORA abriu um loop de reconexão — provavelmente o próprio
+                        // alto-falante (aviso de erro falado acima, ou eco do ambiente) sendo
+                        // captado pelo microfone e "reconhecido" como frase de ativação, iniciando
+                        // outra conversa que falha de novo, repetindo. Damos uma folga aqui pra
+                        // esse eco esvaziar antes de voltar a escutar.
+                        setTimeout(() => this.startWakeWordListener(), 4000);
+                    } else {
+                        this.startWakeWordListener(); // volta a escutar a frase de ativação
+                    }
                 },
                 onError: (message) => {
                     this.pushLog(`[ERRO] ${message}`);
@@ -970,7 +1112,11 @@ class JARVISInterface {
                 onMessage: ({ message, role }) => {
                     const quem = role === 'user' ? 'VOCÊ' : 'JARVIS';
                     this.pushLog(`[FALA] ${quem}: ${message}`);
-                    if (role === 'user') this.maybeAutoLook(message);
+                    if (role === 'user') {
+                        this.maybeHandleVisionCommand(message);
+                        this.maybeAutoLook(message);
+                        this.maybeHandleFullscreenCommand(message);
+                    }
                     this.messageCount++;
                     this.updateStatMessages();
                     // Com o canvas de gestos aberto, cada resposta do Jarvis também vira uma
@@ -1034,6 +1180,7 @@ class JARVISInterface {
             this.pushLog(`[ERRO] Falha ao iniciar conversa: ${error.message || error}`);
             this.updateVoiceStatus('[ERRO] FALHA ELEVENLABS');
             this.updateVoiceButtonState('idle');
+            this.conversationStarting = false;
             this.conversationActive = false;
             this.conversation = null;
             this.faceVisualizer.setActive(false);
@@ -1054,6 +1201,7 @@ class JARVISInterface {
         // onDisconnect também trata isso, mas garantimos o estado aqui como rede de segurança
         this.conversation = null;
         this.conversationActive = false;
+        this.conversationStarting = false;
         this.updateVoiceButtonState('idle');
         this.updateVoiceStatus('SISTEMA ATIVO');
         this.faceVisualizer.setActive(false);

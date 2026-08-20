@@ -545,6 +545,33 @@ body {
     color: #00ff88;
 }
 
+.topbar-fullscreen {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 212, 255, 0.06);
+    border: 1px solid var(--hud-blue);
+    color: var(--hud-blue);
+    font-family: 'Orbitron', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 1px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.topbar-fullscreen:hover {
+    background: rgba(0, 212, 255, 0.2);
+    box-shadow: 0 0 10px var(--hud-blue);
+}
+
+.topbar-fullscreen.active {
+    background: rgba(0, 255, 136, 0.12);
+    border-color: #00ff88;
+    color: #00ff88;
+}
+
 .topbar-wake {
     display: flex;
     align-items: center;
