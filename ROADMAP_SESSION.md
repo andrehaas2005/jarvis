@@ -121,6 +121,14 @@ O agente de voz do ElevenLabs tinha **uma única ferramenta**: um webhook POST p
 - Só depois disso os SCRUM-45/46/47 fecham como **Concluído** de vez
 - Monitorar taxa de erro/latência do `jarvis_backend` no painel do ElevenLabs nos próximos dias, comparando com os 17.9%/9.5s do n8n antigo
 
+### ✅ HUD (frontend) também deployado em produção (SCRUM-34)
+Site estático (sem build) — `Dockerfile.frontend` (nginx:alpine) + serviço `jarvis-frontend` no `docker-compose.yml` do servidor, mesmo padrão Traefik do backend. Ticket original previa Cloudflare Pages; decisão da sessão foi manter tudo na mesma infra Hostinger já provisionada.
+
+- **URL:** https://jarvis-hud.andre.haas.nom.br
+- `script.js`: `JARVIS_BACKEND_URL` detecta local (`localhost`/`127.0.0.1`) vs. produção pelo `window.location.hostname` — mesmo arquivo funciona nos dois ambientes sem editar nada
+- Testado real: HTTP 200, TLS ok (Traefik/Let's Encrypt/Cloudflare), HUD renderizando (globo, radar, relógios), sem erros de console além de um warning inofensivo de geolocalização indisponível
+- `docker-compose.yml` do servidor não é versionado neste repo (fica só em `/root/` no VPS) — a mudança foi feita direto lá, documentada aqui pra não se perder
+
 ---
 
 ## 🔄 Workflow de Desenvolvimento
@@ -159,7 +167,7 @@ Deploy bem-sucedido em PRODUÇÃO
 
 ### IMEDIATO (Sprint 1) — retomar por aqui
 1. **SCRUM-17** — Desativar os workflows JARVIS no n8n (endpoint novo já testado por voz em produção — ver sessão 3)
-2. Testar o HUD (frontend) apontando pro backend de produção (hoje `script.js` usa `JARVIS_BACKEND_URL = 'http://localhost:8000'` — trocar pra `https://jarvis-api.andre.haas.nom.br` quando for usar em produção)
+2. ~~Testar o HUD (frontend) apontando pro backend de produção~~ — **feito** (sessão 3, SCRUM-34): HUD deployado em https://jarvis-hud.andre.haas.nom.br, `script.js` detecta local vs. produção sozinho
 
 ### CURTO PRAZO (Fim Sprint 1)
 5. **SCRUM-20-23** — Settings Page
@@ -243,7 +251,8 @@ Deploy bem-sucedido em PRODUÇÃO
 | Jira Board | https://andrehaas2005.atlassian.net/jira/software/projects/SCRUM/boards/1 |
 | Artifact Roadmap | https://claude.ai/code/artifact/80e1487c-9790-40cc-a6b9-c73799c50feb |
 | Git Repo | /Users/andrehaas/Projetos/jarvis |
-| JARVIS Live | http://localhost:8743/index.html |
+| JARVIS Live (dev local) | http://localhost:8743/index.html |
+| **HUD Jarvis (produção)** | **https://jarvis-hud.andre.haas.nom.br** |
 | **Backend Jarvis (produção)** | **https://jarvis-api.andre.haas.nom.br** |
 | n8n | https://n8n.andre.haas.nom.br |
 | AgentOS (outro projeto, mesmo VPS) | https://painel.andre.haas.nom.br |
