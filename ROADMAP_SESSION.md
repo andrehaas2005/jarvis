@@ -1,8 +1,8 @@
 # 📋 JARVIS Roadmap - Sessão de Continuidade
 
 **Data de Criação:** 2026-08-19  
-**Última Atualização:** 2026-08-19 (sessão 2 — backend Python mergeado em main, testado com dados reais)  
-**Status Geral:** Sprint 1 Ativo ✅ — Backend Python rodando local com credenciais reais, aguardando deploy em produção
+**Última Atualização:** 2026-08-20 (sessão 2 — backend Python **em produção**, testado com dados reais)  
+**Status Geral:** Sprint 1 Ativo ✅ — Backend Python rodando em produção (https://jarvis-api.andre.haas.nom.br)
 
 ---
 
@@ -16,15 +16,14 @@
 
 ### Status Atual
 ```
-Total Issues: 40 (SCRUM-8 a SCRUM-49)
+Total Issues: 41 (SCRUM-8 a SCRUM-50)
 ├── 4 Epics (SCRUM-8 a SCRUM-11)
-├── 36 Histórias (SCRUM-14 a SCRUM-49)
-│   ├── 15 no Sprint 1 original + SCRUM-49 (novo, criado sessão 2)
+├── 37 Histórias (SCRUM-14 a SCRUM-50)
+│   ├── 15 no Sprint 1 original + SCRUM-49/50 (novos, criados sessão 2)
 │   └── 20 no Backlog (FASE 2 + FASE 3)
-├── 5 tickets em Em Deploy: 14, 15, 16, 48, 49 (código mergeado em main, falta deploy real)
-├── 2 tickets em Em análise: 45, 46 (fix mergeado, falta remover n8n pra fechar)
-├── 1 ticket em Em andamento: 47 (falta integrar contact lookup)
-└── 0 Concluídos (nada foi deployado em produção ainda)
+├── 5 tickets CONCLUÍDOS: 14, 15, 16, 48, 50 (deploy real em produção, testado)
+├── 2 tickets em Em análise: 45, 46 (fix real testado, falta remover n8n pra fechar)
+└── 2 tickets em Em andamento: 47 (falta integrar contact lookup), 49 (falta AIRTABLE_BASE_ID)
 ```
 
 ---
@@ -49,39 +48,52 @@ Total Issues: 40 (SCRUM-8 a SCRUM-49)
 
 ---
 
-## 🚀 O que foi feito — SESSÃO 2 (backend Python)
+## 🚀 O que foi feito — SESSÃO 2 (backend Python → produção)
 
 **Decisão:** SCRUM-16 mudou de Node.js para **Python/FastAPI** — usuário está estudando Python e quer aplicar no projeto.
 
-### ✅ Tudo mergeado em `main` — repositório limpo (branches feature deletados)
+### ✅ CONCLUÍDO — rodando em produção real
 
 | Ticket | O que tem | Status Jira |
 |---|---|---|
-| SCRUM-16 | FastAPI app, config, logging JSON, **`app/retry.py`** (retry + idempotência) | Em Deploy |
-| SCRUM-14 | MCP Server Gmail (`send_email`, `list_emails`, `read_email`) | Em Deploy |
-| SCRUM-15 | MCP Server Calendar (`create_event`, `list_events`, `get_event`) + `google_auth.py` compartilhado | Em Deploy |
-| SCRUM-48 | Endpoint `GET /elevenlabs/signed-url` (backend) + `script.js` usando `signedUrl` (frontend) | Em Deploy |
-| SCRUM-49 *(novo, criado nesta sessão)* | MCP Server Contacts/Airtable (`search_contact`, `add_or_update_contact`) | Em Deploy |
+| SCRUM-16 | FastAPI app, config, logging JSON, **`app/retry.py`** (retry + idempotência) | **Concluído** |
+| SCRUM-14 | MCP Server Gmail (`send_email`, `list_emails`, `read_email`) | **Concluído** |
+| SCRUM-15 | MCP Server Calendar (`create_event`, `list_events`, `get_event`) + `google_auth.py` compartilhado | **Concluído** |
+| SCRUM-48 | Endpoint `GET /elevenlabs/signed-url` (backend) + `script.js` usando `signedUrl` (frontend) | **Concluído** |
+| SCRUM-50 *(novo)* | Deploy em produção — Dockerfile, VPS Hostinger, Traefik, DNS | **Concluído** |
+| SCRUM-49 *(novo)* | MCP Server Contacts/Airtable (`search_contact`, `add_or_update_contact`) | Em andamento |
+
+**🌐 Produção:** https://jarvis-api.andre.haas.nom.br — `GET /health` e `GET /elevenlabs/signed-url` testados reais via HTTPS, 200 OK.
 
 **Testado com credenciais e dados REAIS** (não mais mock):
-- OAuth Google real (Gmail + Calendar) — `backend/.credentials/` local, tokens salvos
+- OAuth Google real (Gmail + Calendar) — tokens salvos local E no servidor
 - `send_email`: email real enviado + 2ª chamada com mesma `idempotency_key` **não duplicou** (mesmo `message_id`)
 - `create_event`: evento real criado na agenda + 2ª chamada **não duplicou** (mesmo `event_id`)
-- Contacts (Airtable) e ElevenLabs (signed URL): ainda só testados com mock — faltam as credenciais reais
+- ElevenLabs signed-url: testado real em produção, retornou `wss://api.elevenlabs.io/...` válido
+- Contacts (Airtable): só testado com mock — falta `AIRTABLE_BASE_ID` (API key já está configurada)
+
+### 🖥️ Infraestrutura de produção (VPS Hostinger, descoberta+configurada nesta sessão)
+- **Servidor:** `srv1068805.hstgr.cloud` (IP `72.61.131.105`), já hospeda n8n, AgentOS e outros projetos pessoais via Docker Compose (`/root/docker-compose.yml` **no servidor**, fora deste repo)
+- **Traefik** já configurado como reverse proxy: TLS automático via Let's Encrypt + Cloudflare DNS challenge
+- **DNS:** 100% no Cloudflare, com um registro **wildcard** (`*.andre.haas.nom.br` → IP do VPS) que cobre qualquer subdomínio novo automaticamente — não precisou criar registro nenhum
+- `jarvis.andre.haas.nom.br` já estava ocupado por outro serviço (ferramenta própria da Hostinger, "OpenClaw") — por isso usamos `jarvis-api`
+- Acesso ao servidor: painel Hostinger (Gerenciador Docker) → Web Terminal do container/host
+- Credenciais reais no servidor: `/root/.env` (variáveis) e `/root/jarvis-credentials/` (Google OAuth tokens) — **nunca neste repo**
+- Repo clonado no servidor em `/root/jarvis-repo` para builds futuros
 
 ### 🔎 Diagnóstico dos bugs críticos (investigando os JSONs do n8n)
-- **SCRUM-45/46** (email 8x / atomicidade): causa raiz = confirmação de envio garantida só por **prompt engineering** no `Email Agent Tool.json`, sem nenhuma camada determinística abaixo do LLM. Fix testado com envio real (ver acima).
+- **SCRUM-45/46** (email 8x / atomicidade): causa raiz = confirmação de envio garantida só por **prompt engineering** no `Email Agent Tool.json`, sem nenhuma camada determinística abaixo do LLM. Fix testado com envio real em produção.
 - **SCRUM-47** (Calendar intermitente): causa raiz real é **diferente** do suposto — o `Calendar Agent Tool.json` não tem lookup de nome→email de attendee, depende do LLM alucinar. Gerou o novo ticket **SCRUM-49**. Parte de idempotência já testada real; falta integrar o lookup de contato.
-- **SCRUM-45/46/47 continuam "Em análise"/"Em andamento" e só fecham como Concluído após a migração completa do n8n (SCRUM-17, ainda não feita)** — o n8n antigo continua rodando em produção até lá.
+- **SCRUM-45/46/47 continuam "Em análise"/"Em andamento" e só fecham como Concluído após a migração completa do n8n (SCRUM-17, ainda não feita)** — o n8n antigo continua rodando em produção até lá, no mesmo servidor.
 
 ### ⚠️ Cuidado ao mergear PRs empilhados no GitHub
-Os PRs desta sessão foram criados empilhados (cada um com base no anterior, não direto em `main`) para manter granularidade por ticket. Ao mergear no GitHub, **apenas os PRs cuja base era `main` de fato atualizaram `main`** — os PRs "do meio" da pilha (com base em outro branch feature) ficaram mergeados só no branch pai, não em `main`. Foi preciso `git merge origin/<branch-da-ponta-da-pilha>` manualmente para trazer tudo. **Da próxima vez:** ou mergear só o PR da ponta da pilha (ele já carrega tudo), ou usar PRs não-empilhados (todos com base `main` direto) se quiser mergear em qualquer ordem sem esse cuidado.
+Os primeiros PRs desta sessão foram criados empilhados (cada um com base no anterior). Ao mergear no GitHub, **apenas os PRs cuja base era `main` de fato atualizaram `main`** — os PRs "do meio" da pilha ficaram mergeados só no branch pai. Foi preciso `git merge origin/<branch-da-ponta-da-pilha>` manualmente para trazer tudo. **Da próxima vez:** PRs não-empilhados (todos com base `main` direto) evitam esse problema — foi o que usamos para o SCRUM-50 (deploy) e funcionou sem esse cuidado extra.
 
-### ⚠️ Pendências para fechar os tickets de vez
-1. Preencher `AIRTABLE_API_KEY`/`AIRTABLE_BASE_ID` e `ELEVENLABS_API_KEY` reais no `.env` (Google já está configurado e testado)
+### ⚠️ Pendências restantes
+1. `AIRTABLE_BASE_ID` ainda vazio no `.env` local e no servidor (API key já preenchida) — preencher para o SCRUM-49 funcionar de verdade
 2. Conectar `search_contact` (SCRUM-49) ao fluxo de `create_event` (SCRUM-15) no orquestrador — hoje existem lado a lado, ainda não integrados
 3. **SCRUM-17** — remover n8n de vez (só depois disso SCRUM-45/46/47 fecham como Concluído)
-4. Deploy real em produção do backend (hoje só roda local) — depois disso SCRUM-14/15/16/48/49 fecham como Concluído
+4. Se preencher o Airtable Base ID, atualizar também `/root/.env` no servidor e rodar `docker compose up -d --build jarvis-backend` de novo (comando documentado em `backend/README.md`)
 
 ---
 
@@ -120,10 +132,10 @@ Deploy bem-sucedido em PRODUÇÃO
 ## 📊 Próximas Ações (Ordem de Prioridade)
 
 ### IMEDIATO (Sprint 1) — retomar por aqui
-1. **Preencher `AIRTABLE_API_KEY`/`AIRTABLE_BASE_ID` e `ELEVENLABS_API_KEY`** no `backend/.env` (Google já testado real) — ver `backend/README.md`
+1. **Preencher `AIRTABLE_BASE_ID`** no `backend/.env` local e no `/root/.env` do servidor (API key já preenchida nos dois) — depois rodar `docker compose up -d --build jarvis-backend` no servidor de novo
 2. **Conectar SCRUM-49 → SCRUM-15**: orquestrador chama `search_contact` antes de `create_event` quando attendee for nome (fecha SCRUM-47 de vez)
 3. **SCRUM-17** — Remover n8n / migrar de vez (só depois disso os SCRUM-45/46/47 fecham como Concluído)
-4. **Deploy real em produção** do backend (hoje só roda local via `uvicorn app.main:app --reload`) — só depois disso SCRUM-14/15/16/48/49 fecham como Concluído
+4. Testar o HUD (frontend) apontando pro backend de produção (hoje `script.js` usa `JARVIS_BACKEND_URL = 'http://localhost:8000'` — trocar pra `https://jarvis-api.andre.haas.nom.br` quando for usar em produção)
 
 ### CURTO PRAZO (Fim Sprint 1)
 5. **SCRUM-20-23** — Settings Page
@@ -183,14 +195,15 @@ Deploy bem-sucedido em PRODUÇÃO
 ├── index.html                  ← HUD principal
 ├── script.js                   ← Lógica de voz/gestos (usa signedUrl — SCRUM-48)
 ├── styles.css                  ← Estilos
-├── backend/                     ← NOVO (sessão 2) — só existe nos branches feature/SCRUM-*, não em main
+├── backend/                     ← NOVO (sessão 2) — já em main, rodando em produção
 │   ├── app/                     ← FastAPI: main.py, config.py, retry.py, elevenlabs.py
 │   ├── mcp_servers/
 │   │   ├── gmail/                (SCRUM-14)
 │   │   ├── calendar/             (SCRUM-15)
-│   │   └── contacts/             (SCRUM-49)
+│   │   └── contacts/             (SCRUM-49 — falta AIRTABLE_BASE_ID)
+│   ├── Dockerfile                ← usado pelo deploy em produção (SCRUM-50)
 │   ├── .env.example              ← copiar pra .env e preencher credenciais reais
-│   └── README.md                 ← setup completo de cada MCP Server
+│   └── README.md                 ← setup + infra de produção completa
 ├── .git/
 │   └── (commits referenciam SCRUM-XX)
 └── *.sanitized.json             ← workflows n8n antigos (JARVIS, Email/Calendar/Contacts Agent Tool)
@@ -207,8 +220,14 @@ Deploy bem-sucedido em PRODUÇÃO
 | Artifact Roadmap | https://claude.ai/code/artifact/80e1487c-9790-40cc-a6b9-c73799c50feb |
 | Git Repo | /Users/andrehaas/Projetos/jarvis |
 | JARVIS Live | http://localhost:8743/index.html |
+| **Backend Jarvis (produção)** | **https://jarvis-api.andre.haas.nom.br** |
 | n8n | https://n8n.andre.haas.nom.br |
+| AgentOS (outro projeto, mesmo VPS) | https://painel.andre.haas.nom.br |
 | ElevenLabs | https://elevenlabs.io/app/agents |
+| VPS (Hostinger hPanel) | Gerenciador Docker → `srv1068805.hstgr.cloud` → Web Terminal |
+| Cloudflare (DNS de andre.haas.nom.br) | https://dash.cloudflare.com |
+| Repo clonado no servidor | `/root/jarvis-repo` (para rebuild/deploy) |
+| Docker Compose do servidor | `/root/docker-compose.yml` (fora deste repo git — inclui n8n, AgentOS, jarvis-backend, etc.) |
 
 ---
 
@@ -249,6 +268,6 @@ git checkout bugfix/SCRUM-46-email-atomicity
 
 ---
 
-**Próxima atualização:** Quando as credenciais reais forem preenchidas e os branches testados/mergeados, ou quando Sprint 1 terminar (02/set/2026)  
+**Próxima atualização:** Quando `AIRTABLE_BASE_ID` for preenchido e o SCRUM-49 for integrado/deployado, ou quando o SCRUM-17 (remover n8n) avançar, ou quando Sprint 1 terminar (02/set/2026)  
 **Mantido por:** Claude + User  
 **Token Economy:** Arquivo MD = economia de tokens em próximas sessões ✅
