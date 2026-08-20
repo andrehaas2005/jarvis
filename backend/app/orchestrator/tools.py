@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from app.orchestrator.status_tracker import get_status_tracker
 from mcp_servers.calendar import server as calendar_server
 from mcp_servers.contacts import server as contacts_server
 from mcp_servers.gmail import server as gmail_server
@@ -126,7 +127,20 @@ TOOLS: list[dict[str, Any]] = [
 
 
 async def execute_tool(name: str, tool_input: dict[str, Any]) -> Any:
-    """Dispatcher: chama a função real por trás de cada tool do LLM."""
+    """Dispatcher: chama a função real por trás de cada tool do LLM,
+    registrando sucesso/falha no status tracker (ver `status_tracker.py`,
+    consumido por `GET /status/checkin` — painel de check-in do HUD)."""
+    tracker = get_status_tracker()
+    try:
+        result = await _dispatch(name, tool_input)
+    except Exception as exc:
+        tracker.record(name, ok=False, error=str(exc))
+        raise
+    tracker.record(name, ok=True)
+    return result
+
+
+async def _dispatch(name: str, tool_input: dict[str, Any]) -> Any:
     if name == "send_email":
         idempotency_key = _content_hash(tool_input["to"], tool_input["subject"], tool_input["body"])
         return await gmail_server.send_email(

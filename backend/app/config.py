@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-opus-5"
     jarvis_webhook_secret: str | None = None
 
+    # Painel de créditos (HUD) — Admin API key, só leitura de uso/custo.
+    anthropic_admin_api_key: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

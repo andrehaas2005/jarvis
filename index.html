@@ -82,44 +82,46 @@
             </div>
         </div>
 
-        <!-- Left Side - Loading Systems -->
+        <!-- Left Side - Check-in real (Email/Calendar/Contacts, ver getStatusCheckin() em
+             script.js) + Créditos das APIs pagas (ver getStatusCredits()). Substituiu os
+             gráficos decorativos (SCRUM-52) — dado real de uso, não enfeite. -->
         <div class="hud-panel left-side">
-            <div class="loading-systems">
-                <div class="loading-item">
-                    <span class="loading-text">66UL-054 LOADING...</span>
-                    <div class="loading-bar">
-                        <div class="loading-progress" style="width: 75%"></div>
+            <div class="checkin-systems" id="checkinSystems">
+                <div class="checkin-item" data-capability="email">
+                    <span class="checkin-dot" id="checkinDot-email"></span>
+                    <span class="checkin-text">EMAIL</span>
+                    <span class="checkin-detail" id="checkinDetail-email">sem dados</span>
+                </div>
+                <div class="checkin-item" data-capability="calendar">
+                    <span class="checkin-dot" id="checkinDot-calendar"></span>
+                    <span class="checkin-text">AGENDA</span>
+                    <span class="checkin-detail" id="checkinDetail-calendar">sem dados</span>
+                </div>
+                <div class="checkin-item" data-capability="contacts">
+                    <span class="checkin-dot" id="checkinDot-contacts"></span>
+                    <span class="checkin-text">CONTATOS</span>
+                    <span class="checkin-detail" id="checkinDetail-contacts">sem dados</span>
+                </div>
+            </div>
+
+            <div class="credits-panel" id="creditsPanel">
+                <div class="credits-item">
+                    <div class="credits-header">
+                        <span class="credits-label">ELEVENLABS</span>
+                        <span class="credits-value" id="creditsValueEleven">--</span>
+                    </div>
+                    <div class="credits-bar">
+                        <div class="credits-fill" id="creditsFillEleven" style="width: 0%"></div>
                     </div>
                 </div>
-                <div class="loading-item">
-                    <span class="loading-text">YUGOT/289 LOADING...</span>
-                    <div class="loading-bar">
-                        <div class="loading-progress" style="width: 60%"></div>
-                    </div>
-                </div>
-                <div class="loading-item">
-                    <span class="loading-text">FALKA?943 LOADING...</span>
-                    <div class="loading-bar">
-                        <div class="loading-progress" style="width: 90%"></div>
+                <div class="credits-item">
+                    <div class="credits-header">
+                        <span class="credits-label">ANTHROPIC</span>
+                        <span class="credits-value" id="creditsValueAnthropic">--</span>
                     </div>
                 </div>
             </div>
-            
-            <div class="data-chart">
-                <div class="chart-bars">
-                    <div class="bar" style="height: 75%"></div>
-                    <div class="bar" style="height: 65%"></div>
-                    <div class="bar" style="height: 50%"></div>
-                    <div class="bar" style="height: 65%"></div>
-                </div>
-                <div class="chart-labels">
-                    <span>75</span>
-                    <span>65</span>
-                    <span>50</span>
-                    <span>65</span>
-                </div>
-            </div>
-            
+
             <div class="camera-icon">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                     <path d="M12 15C13.66 15 15 13.66 15 12C15 10.34 13.66 9 12 9C10.34 9 9 10.34 9 12C9 13.66 10.34 15 12 15Z" fill="currentColor"/>

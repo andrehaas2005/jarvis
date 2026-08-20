@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.elevenlabs import get_signed_conversation_url
 from app.logging_config import get_logger, setup_logging
 from app.orchestrator.router import handle_query
+from app.status import get_checkin, get_credits
 
 settings = get_settings()
 setup_logging(settings.jarvis_log_level)
@@ -72,6 +73,20 @@ async def elevenlabs_signed_url() -> dict:
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return {"signed_url": signed_url}
+
+
+@app.get("/status/checkin")
+async def status_checkin() -> dict:
+    """Estado real de Email/Calendar/Contacts pro painel do HUD (SCRUM-52)
+    — baseado em uso real (última chamada de cada tool), não um ping
+    sintético que poderia passar mesmo com o fluxo de voz quebrado."""
+    return get_checkin()
+
+
+@app.get("/status/credits")
+async def status_credits() -> dict:
+    """Consumo das APIs pagas (ElevenLabs, Anthropic) pro painel do HUD."""
+    return await get_credits()
 
 
 @app.post("/jarvis/webhook")
