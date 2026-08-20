@@ -1,7 +1,7 @@
 # 📋 JARVIS Roadmap - Sessão de Continuidade
 
 **Data de Criação:** 2026-08-19  
-**Última Atualização:** 2026-08-20 (sessão 3 — SCRUM-17: orquestrador Python em produção, testado por voz de ponta a ponta; n8n ainda ativo até desativação explícita)  
+**Última Atualização:** 2026-08-20 (sessão 3 — SCRUM-17/52/53/54: orquestrador em produção, bug de confiabilidade por voz corrigido, painel de status/créditos e HUD responsivo mobile; n8n ainda ativo até desativação explícita)  
 **Status Geral:** Sprint 1 Ativo ✅ — Backend Python rodando em produção (https://jarvis-api.andre.haas.nom.br), agora incluindo o orquestrador (`/jarvis/webhook`)
 
 ---
@@ -128,6 +128,26 @@ Site estático (sem build) — `Dockerfile.frontend` (nginx:alpine) + serviço `
 - `script.js`: `JARVIS_BACKEND_URL` detecta local (`localhost`/`127.0.0.1`) vs. produção pelo `window.location.hostname` — mesmo arquivo funciona nos dois ambientes sem editar nada
 - Testado real: HTTP 200, TLS ok (Traefik/Let's Encrypt/Cloudflare), HUD renderizando (globo, radar, relógios), sem erros de console além de um warning inofensivo de geolocalização indisponível
 - `docker-compose.yml` do servidor não é versionado neste repo (fica só em `/root/` no VPS) — a mudança foi feita direto lá, documentada aqui pra não se perder
+
+### ✅ SCRUM-52 — bug de confiabilidade por voz (achado testando envio de email real)
+Usuário reportou: Jarvis insistia "não tenho acesso ao cliente de email" e teve dificuldade achando um contato. Duas causas raiz reais, não o modelo "alucinando":
+1. **Memória cruzada entre conversas (crítico):** ElevenLabs manda `conversation_id` no *corpo* da requisição, backend só lia de um header que nunca chegava — toda conversa caía na sessão `default`, contexto vazando entre conversas diferentes. Fix: `session_id` lê `conversation_id` do corpo primeiro, header como fallback.
+2. **Latência + interrupção:** `search_contact` buscava os 230+ contatos do zero a cada chamada (às vezes 2x, fetch duplicado). Combinado com "Interrupções: Permitir" no ElevenLabs, a chamada da tool era abandonada quando o usuário falava de novo no meio (`"Tool execution was abandoned due to user input"`, visível no log real da conversa). Fix: cache de 2min nos contatos + elimina fetch duplicado + ElevenLabs reconfigurado (Interrupções → "Desativar durante a execução", timeout 20s → ~30s).
+
+Testado real: sessões A/B/A isoladas corretamente via `curl`.
+
+### ✅ SCRUM-53 — painel de status/check-in + créditos
+Pedido do usuário: visibilidade real de saúde das capacidades (não confiar só na fala do Jarvis) + consumo das APIs pagas visível, no lugar dos gráficos decorativos do painel esquerdo.
+- `status_tracker.py`: cada chamada de tool registra sucesso/falha real (não ping sintético), agrupado em email/calendar/contacts
+- `GET /status/checkin` e `GET /status/credits` (ElevenLabs `/v1/user/subscription`; Anthropic Cost Admin API — **conta convertida de Individual pra Team** só pra habilitar a Admin API key, `ANTHROPIC_ADMIN_API_KEY` no `.env`)
+- Frontend: painel esquerdo com 3 bolinhas de check-in + créditos ElevenLabs/Anthropic, atualização automática (20s/5min)
+
+### ✅ SCRUM-54 — HUD responsivo mobile
+Decisões do usuário: radar (topo-direita) escondido no mobile — decorativo; check-in+créditos visível e compacto; clima/relógios e painel direito (log/stats/VU/música) continuam desktop-only.
+
+**Bug real achado no caminho:** `.topbar-actions`/`.hud-panel` não encolhiam abaixo do conteúdo (`min-width:auto` implícito de flex/grid) — forçava a página inteira mais larga que a tela no mobile (viewport 375px virava ~1069px de layout), cortando a topbar pra fora sem scroll possível. Fix: `min-width:0` + `overflow-x:auto` na topbar (rola por toque agora).
+
+Testado real: 360px/375px/768px/1440px, sem overflow em nenhum, desktop sem mudança visual.
 
 ---
 
