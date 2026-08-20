@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     contacts_credentials_path: str | None = None
     contacts_token_path: str | None = None
 
+    # Orquestrador (SCRUM-17) — substitui o node "JARVIS" do n8n
+    llm_provider: str = "anthropic"
+    anthropic_api_key: str | None = None
+    anthropic_model: str = "claude-opus-5"
+    jarvis_webhook_secret: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:
