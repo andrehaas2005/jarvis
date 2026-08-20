@@ -1,0 +1,9 @@
+# HUD (frontend) do JARVIS — site estático puro, sem build (sem package.json).
+# Nginx só serve os arquivos; toda a lógica roda no navegador (script.js fala
+# direto com o backend em https://jarvis-api.andre.haas.nom.br via fetch/CORS).
+FROM nginx:alpine
+
+COPY index.html styles.css script.js gestures.js visualizer3d.js /usr/share/nginx/html/
+COPY earthhologram.gif radar.gif /usr/share/nginx/html/
+
+EXPOSE 80

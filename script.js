@@ -4,8 +4,11 @@
 const ELEVENLABS_AGENT_ID = 'agent_0401ktc7pg1xev08smgfd1t20m52';
 
 // Backend orquestrador (SCRUM-16). Usado para pedir a signed URL da ElevenLabs — ver
-// getElevenLabsSignedUrl() logo abaixo.
-const JARVIS_BACKEND_URL = 'http://localhost:8000';
+// getElevenLabsSignedUrl() logo abaixo. Detecta automaticamente local vs. produção pelo
+// hostname da página, então o mesmo script.js funciona sem editar nada nos dois ambientes.
+const JARVIS_BACKEND_URL = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+    ? 'http://localhost:8000'
+    : 'https://jarvis-api.andre.haas.nom.br';
 
 // Música de fundo tocada durante a conversa. O arquivo em si NÃO fica no git (ver .gitignore —
 // é conteúdo com direitos autorais, só existe na sua máquina). Pra trocar a faixa padrão, é só
