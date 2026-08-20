@@ -32,6 +32,33 @@ uvicorn app.main:app --reload --port 8000
 - Docs automáticas: http://localhost:8000/docs
 - Signed URL da ElevenLabs: http://localhost:8000/elevenlabs/signed-url
 
+## Produção (SCRUM-50)
+
+Rodando no VPS Hostinger (`srv1068805.hstgr.cloud`), atrás do Traefik já
+existente no servidor (mesmo padrão do n8n e do AgentOS — TLS automático
+via Let's Encrypt + Cloudflare DNS challenge).
+
+- **URL:** https://jarvis-api.andre.haas.nom.br
+- **Healthcheck:** https://jarvis-api.andre.haas.nom.br/health
+
+### Como atualizar o deploy
+
+O servidor tem um clone do repo em `/root/jarvis-repo` e o serviço
+`jarvis-backend` no `/root/docker-compose.yml` principal do VPS (não neste
+repo — é específico do servidor, ao lado de outros projetos pessoais).
+
+```bash
+# No servidor:
+cd /root/jarvis-repo && git pull origin main
+cd /root && docker compose up -d --build jarvis-backend
+```
+
+Credenciais reais (Google OAuth tokens, Airtable, ElevenLabs) ficam em
+`/root/.env` e `/root/jarvis-credentials/` no servidor — nunca neste repo.
+`jarvis.andre.haas.nom.br` já está ocupado por outro serviço (ferramenta
+de gerenciamento da própria Hostinger), por isso o subdomínio é
+`jarvis-api`.
+
 ## ElevenLabs — Signed URL (fix SCRUM-48)
 
 O agente conecta anonimamente via `agentId` (sem API key) para voz/texto,
