@@ -83,7 +83,7 @@ Total Issues: 41 (SCRUM-8 a SCRUM-50)
 
 ### 🔎 Diagnóstico dos bugs críticos (investigando os JSONs do n8n)
 - **SCRUM-45/46** (email 8x / atomicidade): causa raiz = confirmação de envio garantida só por **prompt engineering** no `Email Agent Tool.json`, sem nenhuma camada determinística abaixo do LLM. Fix testado com envio real em produção.
-- **SCRUM-47** (Calendar intermitente): causa raiz real é **diferente** do suposto — o `Calendar Agent Tool.json` não tem lookup de nome→email de attendee, depende do LLM alucinar. Gerou o novo ticket **SCRUM-49**. Parte de idempotência já testada real; falta integrar o lookup de contato.
+- **SCRUM-47** (Calendar intermitente): causa raiz real é **diferente** do suposto — o `Calendar Agent Tool.json` não tem lookup de nome→email de attendee, depende do LLM alucinar. Gerou o novo ticket **SCRUM-49**. Idempotência testada real; lookup de contato agora **integrado dentro do `create_event`** (sessão 3): `attendees` aceita nome, resolvido via Contacts antes de criar o evento; ambíguo ou não encontrado → erro descritivo, nunca adivinha.
 - **SCRUM-45/46/47 continuam "Em análise"/"Em andamento" e só fecham como Concluído após a migração completa do n8n (SCRUM-17, ainda não feita)** — o n8n antigo continua rodando em produção até lá, no mesmo servidor.
 
 ### ⚠️ Cuidado ao mergear PRs empilhados no GitHub
@@ -91,7 +91,7 @@ Os primeiros PRs desta sessão foram criados empilhados (cada um com base no ant
 
 ### ⚠️ Pendências restantes
 1. ~~Ativar a People API + autorizar OAuth~~ — **feito** (local e produção)
-2. Conectar `search_contact` (SCRUM-49) ao fluxo de `create_event` (SCRUM-15) no orquestrador — hoje existem lado a lado, ainda não integrados
+2. ~~Conectar `search_contact` (SCRUM-49) ao fluxo de `create_event` (SCRUM-15)~~ — **feito** (sessão 3): `create_event` resolve `attendees` por nome via Contacts antes de criar o evento; testado real (nome único, ambíguo, não encontrado, email direto)
 3. **SCRUM-17** — remover n8n de vez (só depois disso SCRUM-45/46/47 fecham como Concluído)
 
 ---
@@ -131,9 +131,8 @@ Deploy bem-sucedido em PRODUÇÃO
 ## 📊 Próximas Ações (Ordem de Prioridade)
 
 ### IMEDIATO (Sprint 1) — retomar por aqui
-1. **Conectar SCRUM-49 → SCRUM-15**: orquestrador chama `search_contact` antes de `create_event` quando attendee for nome (fecha SCRUM-47 de vez)
-2. **SCRUM-17** — Remover n8n / migrar de vez (só depois disso os SCRUM-45/46/47 fecham como Concluído)
-3. Testar o HUD (frontend) apontando pro backend de produção (hoje `script.js` usa `JARVIS_BACKEND_URL = 'http://localhost:8000'` — trocar pra `https://jarvis-api.andre.haas.nom.br` quando for usar em produção)
+1. **SCRUM-17** — Remover n8n / migrar de vez (só depois disso os SCRUM-45/46/47 fecham como Concluído)
+2. Testar o HUD (frontend) apontando pro backend de produção (hoje `script.js` usa `JARVIS_BACKEND_URL = 'http://localhost:8000'` — trocar pra `https://jarvis-api.andre.haas.nom.br` quando for usar em produção)
 
 ### CURTO PRAZO (Fim Sprint 1)
 5. **SCRUM-20-23** — Settings Page

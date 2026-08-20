@@ -137,7 +137,11 @@ Expõe 3 ferramentas MCP:
   — cria evento (`start`/`end` em ISO 8601). A `idempotency_key` é
   obrigatória e passa pelo `app.retry` do SCRUM-16: retry/timeout do
   agente de voz não cria eventos duplicados (fix do SCRUM-47 — Calendar
-  Agent intermitente).
+  Agent intermitente). `attendees` aceita nome **ou** email — nomes são
+  resolvidos via Contacts (SCRUM-49) antes de criar o evento; se o nome
+  não achar exatamente um contato (nenhum ou ambíguo), o evento não é
+  criado e um erro descritivo é levantado em vez de adivinhar o email
+  (fecha a outra causa raiz do SCRUM-47).
 - **`list_events(time_min, time_max, max_results)`** — lista eventos em um período.
 - **`get_event(event_id)`** — lê os detalhes de um evento específico.
 
