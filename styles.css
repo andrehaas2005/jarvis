@@ -322,6 +322,22 @@ body {
     font-family: 'Roboto', sans-serif;
 }
 
+/* Quantas abas/dispositivos têm o HUD aberto agora — ver loadPresenceHeartbeat()
+   em script.js. */
+.presence-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.7rem;
+    color: var(--hud-text-dim);
+    letter-spacing: 1px;
+}
+
+.presence-value {
+    font-size: 0.75rem;
+    color: var(--hud-text);
+}
+
 /* Créditos das APIs pagas (ElevenLabs, Anthropic) — ver getStatusCredits()
    em script.js. */
 .credits-panel {
