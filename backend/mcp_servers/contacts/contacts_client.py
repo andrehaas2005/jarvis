@@ -89,29 +89,69 @@ class ContactsClient:
 
         return people
 
-    def search_contact(self, name: str) -> Contact | None:
-        """Busca um contato por nome exato (case-insensitive) entre os
-        Contatos do Google do usuário. Retorna None se não encontrar."""
+    def _exact_match(self, name: str) -> Contact | None:
+        """Busca um contato por nome exato (case-insensitive). Usado pelo
+        upsert, que precisa ter certeza de casar com a pessoa certa antes
+        de sobrescrever campos."""
         needle = name.strip().lower()
 
         for person in self._list_all_people():
             for name_entry in person.get("names", []):
-                display = name_entry.get("displayName", "")
-                if display.strip().lower() == needle:
-                    contact = self._person_to_contact(person)
-                    logger.info(
-                        "contacts_search_found",
-                        extra={"extra_fields": {"name": name, "resource_name": contact.resource_name}},
-                    )
-                    return contact
+                if name_entry.get("displayName", "").strip().lower() == needle:
+                    return self._person_to_contact(person)
+
+        return None
+
+    def search_contact(self, name: str) -> tuple[Contact | None, list[Contact]]:
+        """Busca um contato por nome entre os Contatos do Google do usuário.
+
+        Primeiro tenta nome exato (case-insensitive). Se não achar, cai pra
+        substring — útil pra voz/conversa, onde o nome raramente vem
+        completo (ex.: "Maria" deve achar "Maria Aparecida de Oliveira").
+
+        Retorna `(contact, candidates)`:
+        - match único (exato ou substring): `(contact, [])`
+        - nenhum match: `(None, [])`
+        - substring bateu em mais de um contato (ambíguo, sem exato):
+          `(None, candidates)` — quem chamar deve pedir pra especificar.
+        """
+        exact = self._exact_match(name)
+        if exact is not None:
+            logger.info(
+                "contacts_search_found_exact",
+                extra={"extra_fields": {"name": name, "resource_name": exact.resource_name}},
+            )
+            return exact, []
+
+        needle = name.strip().lower()
+        candidates: list[Contact] = []
+        for person in self._list_all_people():
+            for name_entry in person.get("names", []):
+                if needle in name_entry.get("displayName", "").strip().lower():
+                    candidates.append(self._person_to_contact(person))
+                    break
+
+        if len(candidates) == 1:
+            logger.info(
+                "contacts_search_found_substring",
+                extra={"extra_fields": {"name": name, "resource_name": candidates[0].resource_name}},
+            )
+            return candidates[0], []
+
+        if len(candidates) > 1:
+            logger.info(
+                "contacts_search_ambiguous",
+                extra={"extra_fields": {"name": name, "matches": len(candidates)}},
+            )
+            return None, candidates
 
         logger.info("contacts_search_not_found", extra={"extra_fields": {"name": name}})
-        return None
+        return None, []
 
     def upsert_contact(self, name: str, email: str = "", phone: str = "") -> Contact:
         """Cria o contato se não existir (por Nome), ou atualiza os campos
         preenchidos (email/telefone) de um contato existente."""
-        existing = self.search_contact(name)
+        existing = self._exact_match(name)
 
         final_email = email or (existing.email if existing else "")
         final_phone = phone or (existing.phone if existing else "")
