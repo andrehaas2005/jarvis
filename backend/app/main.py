@@ -5,14 +5,16 @@ MCP Servers (Gmail, Calendar) com retry e idempotência, evitando os bugs
 SCRUM-45 (email disparando 8x) e SCRUM-46 (falta de atomicidade).
 """
 
+import hmac
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.elevenlabs import get_signed_conversation_url
 from app.logging_config import get_logger, setup_logging
+from app.orchestrator.router import handle_query
 
 settings = get_settings()
 setup_logging(settings.jarvis_log_level)
@@ -70,3 +72,37 @@ async def elevenlabs_signed_url() -> dict:
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return {"signed_url": signed_url}
+
+
+@app.post("/jarvis/webhook")
+async def jarvis_webhook(
+    request: Request,
+    x_jarvis_secret: str | None = Header(default=None, alias="x-jarvis-secret"),
+    x_conversation_id: str | None = Header(default=None, alias="x-conversation-id"),
+) -> dict:
+    """Substitui o webhook do n8n (SCRUM-17) como ferramenta única do agente
+    de voz do ElevenLabs. Mesmo contrato: `{"query": "..."}` no corpo,
+    autenticado pelo header `x-jarvis-secret` — só troca a URL configurada
+    na tool do agente.
+
+    Um LLM (`app/orchestrator/router.py`) decide qual MCP tool chamar
+    (Gmail/Calendar/Contacts) a partir da query, com memória de conversa
+    por `x-conversation-id` (equivalente ao "Simple Memory" do n8n)."""
+    if not settings.jarvis_webhook_secret or not hmac.compare_digest(
+        x_jarvis_secret or "", settings.jarvis_webhook_secret
+    ):
+        raise HTTPException(status_code=401, detail="x-jarvis-secret inválido ou ausente")
+
+    body = await request.json()
+    query = body.get("query", "")
+    if not query:
+        raise HTTPException(status_code=400, detail="campo 'query' obrigatório no corpo")
+
+    session_id = x_conversation_id or "default"
+
+    try:
+        answer = await handle_query(query, session_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return {"query": answer}
