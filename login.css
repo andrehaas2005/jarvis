@@ -41,9 +41,10 @@
     animation: hologramFloat 8s ease-in-out infinite;
 }
 
-.login-logo-svg {
+.login-logo-img {
     width: 100%;
     height: 100%;
+    object-fit: contain;
 }
 
 .login-title {
