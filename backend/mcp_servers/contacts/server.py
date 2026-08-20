@@ -1,4 +1,4 @@
-"""MCP Server de Contacts / Airtable (SCRUM-49).
+"""MCP Server de Contacts / Google Sheets (SCRUM-49).
 
 Expõe `search_contact` e `add_or_update_contact` como ferramentas MCP.
 
@@ -9,9 +9,15 @@ MCP Server fecha essa lacuna: o backend orquestrador (SCRUM-16) deve chamar
 `search_contact(name)` antes de `calendar.create_event` sempre que o
 attendee vier como nome em vez de email.
 
+Usa a Google People API (Contatos do Google) — os contatos reais do
+usuário, mesma conta já usada pelo Gmail/Calendar, sem cadastro duplicado
+e sem custo.
+
 Rodar standalone (stdio, para testar com um MCP client/inspector):
     python -m mcp_servers.contacts.server
 """
+
+import asyncio
 
 from mcp.server import MCPServer
 
@@ -25,7 +31,7 @@ logger = get_logger("jarvis.mcp.contacts.server")
 
 mcp = MCPServer(
     name="jarvis-contacts",
-    description="MCP Server de contatos (Airtable) para o JARVIS: lookup determinístico nome → email.",
+    description="MCP Server de contatos (Google Contacts / People API) para o JARVIS: lookup determinístico nome → email.",
 )
 
 _client: ContactsClient | None = None
@@ -34,15 +40,14 @@ _client: ContactsClient | None = None
 def _get_client() -> ContactsClient:
     global _client
     if _client is None:
-        if not settings.airtable_api_key or not settings.airtable_base_id:
+        if not settings.contacts_credentials_path or not settings.contacts_token_path:
             raise RuntimeError(
-                "AIRTABLE_API_KEY / AIRTABLE_BASE_ID não configurados no .env "
+                "CONTACTS_CREDENTIALS_PATH / CONTACTS_TOKEN_PATH não configurados no .env "
                 "(veja backend/.env.example)."
             )
         _client = ContactsClient(
-            api_key=settings.airtable_api_key,
-            base_id=settings.airtable_base_id,
-            table_name=settings.airtable_table_name,
+            credentials_path=settings.contacts_credentials_path,
+            token_path=settings.contacts_token_path,
         )
     return _client
 
@@ -52,7 +57,7 @@ async def search_contact(name: str) -> dict:
     """Busca um contato pelo nome exato. Retorna os campos do contato
     (name, email, phone) ou found=False se não existir na agenda."""
     client = _get_client()
-    contact = await client.search_contact(name)
+    contact = await asyncio.to_thread(client.search_contact, name)
     if contact is None:
         return {"found": False}
     return {
@@ -68,9 +73,9 @@ async def add_or_update_contact(name: str, email: str = "", phone: str = "") -> 
     """Cria um novo contato ou atualiza um existente (casamento pelo nome).
     Passe apenas os campos que quer definir/alterar — os demais ficam como estão."""
     client = _get_client()
-    contact = await client.upsert_contact(name, email, phone)
+    contact = await asyncio.to_thread(client.upsert_contact, name, email, phone)
     return {
-        "record_id": contact.record_id,
+        "resource_name": contact.resource_name,
         "name": contact.name,
         "email": contact.email,
         "phone": contact.phone,

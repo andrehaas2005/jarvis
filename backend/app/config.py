@@ -26,9 +26,8 @@ class Settings(BaseSettings):
     elevenlabs_api_key: str | None = None
     elevenlabs_agent_id: str | None = None
 
-    airtable_api_key: str | None = None
-    airtable_base_id: str | None = None
-    airtable_table_name: str = "Sheet1"
+    contacts_credentials_path: str | None = None
+    contacts_token_path: str | None = None
 
 
 @lru_cache
