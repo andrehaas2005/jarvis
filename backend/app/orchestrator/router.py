@@ -20,7 +20,7 @@ from app.config import get_settings
 from app.logging_config import get_logger
 from app.orchestrator.history_store import get_recent_summary, log_turn
 from app.orchestrator.memory import get_session_memory
-from app.orchestrator.providers import get_provider
+from app.orchestrator.providers import RateLimitedError, get_provider
 from app.orchestrator.tools import TOOLS, execute_tool
 from app.settings_store import get_llm_config
 
@@ -97,7 +97,22 @@ async def handle_query(query: str, session_id: str) -> str:
         extra={"extra_fields": {"session_id": session_id, "history_len": len(history)}},
     )
 
-    text, updated_messages = await provider.run_tool_loop(system, messages, TOOLS, execute_tool)
+    try:
+        text, updated_messages = await provider.run_tool_loop(system, messages, TOOLS, execute_tool)
+    except RateLimitedError:
+        # 429 do provedor (comum em plano gratuito — Groq: 8k tokens/minuto no
+        # gpt-oss-20b, achado real em produção) — resposta de voz natural em vez
+        # de virar 500 genérico ("houve um erro"). Não persiste na memória: a
+        # troca não aconteceu de verdade, não é histórico real da conversa.
+        logger.warning(
+            "orchestrator_rate_limited",
+            extra={"extra_fields": {"session_id": session_id, "llm_provider": llm_config["llm_provider"]}},
+        )
+        return (
+            "Desculpa, Senhor — atingi o limite de uso do modelo agora. "
+            "Pode tentar de novo em alguns segundos?"
+        )
+
     memory.set(session_id, updated_messages)
     log_turn(session_id, query, text)
 

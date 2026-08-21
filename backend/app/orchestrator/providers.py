@@ -24,6 +24,15 @@ ToolExecutor = Callable[[str, dict[str, Any]], Awaitable[str]]
 MAX_TOOL_ITERATIONS = 6
 
 
+class RateLimitedError(Exception):
+    """O provedor de LLM recusou a chamada por limite de taxa (429) —
+    comum em planos gratuitos (Groq: só 8k tokens/minuto no gpt-oss-20b,
+    achado real em produção, SCRUM-59). `router.py` traduz isso numa
+    resposta de voz natural em vez de deixar virar 500 genérico pro
+    usuário (achado real: ligação real batendo nisso segundos depois de
+    testes manuais consumirem o teto por minuto)."""
+
+
 class LLMProvider(ABC):
     """Contrato mínimo que todo provedor de LLM do orquestrador implementa."""
 
@@ -61,15 +70,20 @@ class AnthropicProvider(LLMProvider):
     ) -> tuple[str, list[dict[str, Any]]]:
         messages = list(messages)
 
+        import anthropic
+
         for _ in range(MAX_TOOL_ITERATIONS):
-            response = await asyncio.to_thread(
-                self._client.messages.create,
-                model=self._model,
-                max_tokens=2048,
-                system=system,
-                tools=tools,
-                messages=messages,
-            )
+            try:
+                response = await asyncio.to_thread(
+                    self._client.messages.create,
+                    model=self._model,
+                    max_tokens=2048,
+                    system=system,
+                    tools=tools,
+                    messages=messages,
+                )
+            except anthropic.RateLimitError as exc:
+                raise RateLimitedError(str(exc)) from exc
             messages.append({"role": "assistant", "content": response.content})
 
             if response.stop_reason != "tool_use":
@@ -191,6 +205,8 @@ class LocalOpenAICompatibleProvider(LLMProvider):
                         "max_tokens": 512,
                     },
                 )
+                if response.status_code == 429:
+                    raise RateLimitedError(response.text)
                 response.raise_for_status()
                 data = response.json()
                 message = data["choices"][0]["message"]
