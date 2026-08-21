@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     jarvis_auth_secret: str = "troque-isso-no-.env-em-producao"
     jarvis_db_path: str = "data/jarvis.db"
 
+    # Monitoramento (SCRUM-39) — rastreamento de erro real, sem depender de catar log manual
+    # no Web Terminal do VPS toda vez (foi assim que vários bugs desta sessão foram achados).
+    # Vazio = Sentry desligado (comportamento de hoje, sem mudança se não configurar).
+    sentry_dsn: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:
