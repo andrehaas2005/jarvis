@@ -661,7 +661,19 @@ class JARVISInterface {
             });
         }
 
-        // Seção 3: modelo de IA — só carrega quando o modal abre (evita chamada à toa)
+        // Seção 3: modelo de IA — só carrega quando o modal abre (evita chamada à toa).
+        // Trocar o provedor sozinho, sem atualizar o campo de modelo, permite salvar uma
+        // combinação inválida (ex.: provedor "ollama" com o campo ainda em "claude-opus-5")
+        // — foi exatamente isso que aconteceu em produção e derrubou TODAS as tools (Gmail,
+        // Calendar, Contacts) com 500, porque o Ollama não existe no servidor. Preenche um
+        // modelo padrão sensato pro provedor escolhido sempre que o select mudar — o campo
+        // continua editável livremente, só evita salvar por engano com o valor errado.
+        if (this.settingsLLMProvider && this.settingsLLMModel) {
+            this.settingsLLMProvider.addEventListener('change', () => {
+                const defaults = { anthropic: 'claude-opus-5', ollama: 'llama3.1' };
+                this.settingsLLMModel.value = defaults[this.settingsLLMProvider.value] || '';
+            });
+        }
     }
 
     renderSettingsPhrases() {
@@ -1145,15 +1157,19 @@ class JARVISInterface {
         if (!this.lastWeather) return '';
         const { temp, condition, rainChance } = this.lastWeather;
         const chuvaTexto = typeof rainChance === 'number'
-            ? `${rainChance}% de chance de chuva`
-            : 'previsão de chuva indisponível no momento';
+            ? `A chance de chuva hoje é de ${rainChance}%. `
+            : 'A previsão de chuva está indisponível no momento. ';
 
-        // Agenda real depende do Agent Tool de calendário do n8n, que ainda está pendente de
-        // configuração (ver PLANO_EVOLUCAO.md) — por ora avisamos isso de forma transparente em
-        // vez de inventar compromissos.
-        return `Antes de mais nada, Senhor: agora está ${temp}°C, ${condition}, com ${chuvaTexto} hoje. ` +
-            `Quanto à sua agenda, ainda não tenho acesso a ela — o calendário do Senhor segue um ` +
-            `mistério que pretendo resolver em breve. `;
+        // Este texto é injetado como fala LITERAL (substituição de {{daily_briefing}} na
+        // "Primeira mensagem" do agente, feita pelo SDK — não passa pelo LLM, então a
+        // pontuação aqui É a prosódia final). Achado real: a versão antiga ("agora está
+        // 23°C, céu limpo, com 40% de chance de chuva hoje") empilhava 3 vírgulas logo depois
+        // do símbolo de grau — o TTS engasgava bem no início, exatamente ao falar a
+        // temperatura. Frases curtas, "graus" por extenso (sem o símbolo °) e sem vírgulas
+        // grudadas no número resolvem — mesma informação, só mais fácil de sintetizar.
+        // Também removida a menção a "ainda não tenho acesso à agenda": ficou desatualizada
+        // depois da migração do Calendar pro MCP (SCRUM-18) — o Jarvis já acessa a agenda.
+        return `Antes de mais nada, Senhor. Agora está ${temp} graus, com ${condition}. ` + chuvaTexto;
     }
 
     // Tradução simplificada dos códigos WMO que a Open-Meteo usa (docs: open-meteo.com/en/docs)
