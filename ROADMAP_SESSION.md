@@ -199,6 +199,19 @@ Deploy bem-sucedido em PRODUÇÃO
 
 ---
 
+## 🚀 O que foi feito — SESSÃO 4 (SCRUM-56/57 login+fix, SCRUM-17 n8n, SCRUM-20-23 Settings Page)
+
+### ✅ SCRUM-20/21/22/23 — Settings Page
+Modal acessível pelo botão ⚙ na topbar ou por voz ("Jarvis, abrir configurações"), três seções:
+
+- **SCRUM-21 (frases de ativação):** `this.wakePhrases` (antes `WAKE_PHRASES` fixo) — adicionar/remover/restaurar padrão, persistido em `localStorage`. Popover existente e o reconhecimento de voz passam a ler dessa lista dinâmica.
+- **SCRUM-22 (playlist de música):** botão único de trocar faixa virou playlist de verdade (várias faixas locais, avança sozinha ao terminar cada uma, clique numa faixa toca na hora). Só dura a sessão, como antes.
+- **SCRUM-23 (modelo de IA) — usuário pediu explicitamente que não travasse só em Ollama/qwen3-4b:** `backend/app/settings_store.py` (novo) guarda provider/model num JSON no volume persistente, lido a cada request do orquestrador (`router.py`) — troca sem restart. `GET/PUT /settings/llm` (auth via token do login; troca restrita a `role=admin`). `OllamaProvider` genérico em `providers.py` — qualquer modelo instalado no Ollama, texto livre, além do `AnthropicProvider` já existente.
+
+Testado local e em produção (`GET /settings/llm` retornando o default correto, modal renderizando com dado real do backend).
+
+---
+
 ## 📊 Próximas Ações (Ordem de Prioridade)
 
 ### IMEDIATO (Sprint 1) — retomar por aqui
@@ -206,8 +219,8 @@ Deploy bem-sucedido em PRODUÇÃO
 2. ~~Testar o HUD (frontend) apontando pro backend de produção~~ — **feito** (sessão 3, SCRUM-34): HUD deployado em https://jarvis-hud.andre.haas.nom.br, `script.js` detecta local vs. produção sozinho
 
 ### CURTO PRAZO (Fim Sprint 1)
-5. **SCRUM-20-23** — Settings Page (inclui a página de configuração de usuários prevista como fase 2 do SCRUM-56/login)
-6. **SCRUM-24-25** — Sistema de Memória (Nível 1-2)
+5. ~~**SCRUM-20-23** — Settings Page~~ — **feito** (sessão 4): frases de ativação, playlist de música, modelo de IA — ver seção acima. (A página de gestão de usuários — criar/editar outras contas do login — não tinha ticket próprio ainda; continua pendente, é diferente desta Settings Page.)
+6. **SCRUM-24-25** — Sistema de Memória (Nível 1-2) — retomar por aqui
 
 ---
 
