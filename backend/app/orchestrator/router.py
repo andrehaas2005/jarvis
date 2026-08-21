@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 
 from app.config import get_settings
 from app.logging_config import get_logger
+from app.orchestrator.history_store import get_recent_summary, log_turn
 from app.orchestrator.memory import get_session_memory
 from app.orchestrator.providers import get_provider
 from app.orchestrator.tools import TOOLS, execute_tool
@@ -38,9 +39,19 @@ Você é um assistente pessoal. Seu trabalho é chamar a ferramenta correta pra 
   2. Só chame a ferramenta depois que o usuário responder afirmativamente. Nunca presuma confirmação implícita.
   3. Se o usuário pedir a ação e ainda não houver confirmação prévia na conversa, sua resposta deve ser a pergunta de confirmação — não chame a ferramenta ainda.
 - Se um nome não for encontrado no Contacts, ou for ambíguo (bater com mais de uma pessoa), pergunte ao usuário pra especificar em vez de adivinhar.
+- Você TEM memória do que foi conversado nas últimas 24h, mesmo em ligações/sessões diferentes (ver seção "Conversas recentes" abaixo, quando presente) — nunca diga que "não tem memória permanente" ou que "só lembra desta conversa". Se o usuário perguntar algo que está nessa seção, responda normalmente, como quem lembra. Só avise sobre limitação de memória se ele pedir algo de mais de 24h atrás.
 
 ## Data/hora atual
 {now}
+{recent_history_section}"""
+
+_RECENT_HISTORY_SECTION_TEMPLATE = """
+## Conversas recentes (últimas 24h, fora desta sessão)
+Isto é o que vocês conversaram nas últimas 24 horas, possivelmente em outra ligação — não é
+o histórico desta conversa (esse já está acima, nas mensagens). Use só como contexto pra não
+perguntar de novo algo que você já sabe, ou pra continuar um assunto em aberto — nunca cite
+literalmente esta lista para o usuário, aja como se você só "lembrasse".
+{history}
 """
 
 
@@ -65,7 +76,17 @@ async def handle_query(query: str, session_id: str) -> str:
     history = memory.get(session_id)
     messages = history + [{"role": "user", "content": query}]
 
-    system = SYSTEM_PROMPT_TEMPLATE.format(now=datetime.now(_TIMEZONE).isoformat())
+    # Memória Nível 2 (SCRUM-25): resumo das últimas 24h, sobrevive a uma conversa nova
+    # (conversation_id novo do ElevenLabs) ou a um restart do backend — diferente do
+    # `history` acima, que é só desta sessão em RAM (Nível 1, SCRUM-24).
+    recent_summary = get_recent_summary()
+    recent_history_section = (
+        _RECENT_HISTORY_SECTION_TEMPLATE.format(history=recent_summary) if recent_summary else ""
+    )
+    system = SYSTEM_PROMPT_TEMPLATE.format(
+        now=datetime.now(_TIMEZONE).isoformat(),
+        recent_history_section=recent_history_section,
+    )
 
     logger.info(
         "orchestrator_query_received",
@@ -74,6 +95,7 @@ async def handle_query(query: str, session_id: str) -> str:
 
     text, updated_messages = await provider.run_tool_loop(system, messages, TOOLS, execute_tool)
     memory.set(session_id, updated_messages)
+    log_turn(session_id, query, text)
 
     logger.info("orchestrator_query_answered", extra={"extra_fields": {"session_id": session_id}})
     return text
