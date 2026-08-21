@@ -16,6 +16,7 @@ from app.auth import User, authenticate, init_db, issue_token, verify_token
 from app.config import get_settings
 from app.elevenlabs import get_signed_conversation_url
 from app.logging_config import get_logger, setup_logging
+from app.orchestrator.history_store import init_history_db
 from app.orchestrator.router import handle_query
 from app.presence import get_active_count, heartbeat
 from app.settings_store import get_llm_config, set_llm_config
@@ -29,6 +30,7 @@ logger = get_logger("jarvis.main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    init_history_db()
     logger.info(
         "jarvis_backend_starting",
         extra={"extra_fields": {"env": settings.jarvis_env, "port": settings.jarvis_api_port}},
