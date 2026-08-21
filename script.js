@@ -96,6 +96,7 @@ class JARVISInterface {
         this.creditsValueEleven = document.getElementById('creditsValueEleven');
         this.creditsFillEleven = document.getElementById('creditsFillEleven');
         this.creditsValueAnthropic = document.getElementById('creditsValueAnthropic');
+        this.creditsValueModel = document.getElementById('creditsValueModel');
 
         // Presença — um ID por aba (não por pessoa: sem login, não dá pra saber quem é quem,
         // só quantas abas/dispositivos distintos têm o HUD aberto agora). Persistido em
@@ -669,9 +670,11 @@ class JARVISInterface {
         // modelo padrão sensato pro provedor escolhido sempre que o select mudar — o campo
         // continua editável livremente, só evita salvar por engano com o valor errado.
         if (this.settingsLLMProvider && this.settingsLLMModel) {
+            const ollamaWarning = document.getElementById('settingsLLMOllamaWarning');
             this.settingsLLMProvider.addEventListener('change', () => {
                 const defaults = { anthropic: 'claude-opus-5', ollama: 'llama3.1' };
                 this.settingsLLMModel.value = defaults[this.settingsLLMProvider.value] || '';
+                if (ollamaWarning) ollamaWarning.hidden = this.settingsLLMProvider.value !== 'ollama';
             });
         }
     }
@@ -729,6 +732,8 @@ class JARVISInterface {
             const data = await response.json();
             this.settingsLLMProvider.value = data.llm_provider;
             this.settingsLLMModel.value = data.llm_model;
+            const ollamaWarning = document.getElementById('settingsLLMOllamaWarning');
+            if (ollamaWarning) ollamaWarning.hidden = data.llm_provider !== 'ollama';
         } catch (error) {
             console.warn('Não deu pra carregar o modelo de IA atual:', error.message);
             if (this.settingsLLMStatus) {
@@ -765,6 +770,9 @@ class JARVISInterface {
             }
             if (this.settingsLLMStatus) this.settingsLLMStatus.textContent = 'Salvo ✓';
             this.pushLog(`[CONFIG] Modelo de IA trocado para ${provider}/${model}`);
+            // Reflete na hora no painel de créditos (SCRUM-58) — sem esperar o polling de 5min,
+            // pra confirmar visualmente que a troca pegou de verdade.
+            this.loadStatusCredits();
         } catch (error) {
             if (this.settingsLLMStatus) {
                 this.settingsLLMStatus.textContent = error.message || 'Falha ao salvar';
@@ -1065,6 +1073,11 @@ class JARVISInterface {
                 this.creditsValueAnthropic.textContent = `US$ ${anthropic.spend_usd.toFixed(2)}`;
             } else {
                 this.creditsValueAnthropic.textContent = 'indisponível';
+            }
+
+            if (this.creditsValueModel && data.llm) {
+                this.creditsValueModel.textContent = data.llm.model;
+                this.creditsValueModel.title = `Provedor: ${data.llm.provider}`;
             }
         } catch (error) {
             console.warn('Falha ao buscar créditos do backend:', error.message);

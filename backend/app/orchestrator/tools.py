@@ -15,10 +15,78 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+import httpx
+
 from app.orchestrator.status_tracker import get_status_tracker
 from mcp_servers.calendar import server as calendar_server
 from mcp_servers.contacts import server as contacts_server
 from mcp_servers.gmail import server as gmail_server
+
+# Coordenadas padrão quando o usuário não especifica cidade — mesmo fallback do widget de
+# clima no HUD (script.js, loadWeather()), São Paulo.
+_DEFAULT_WEATHER_LOCATION = {"lat": -23.5505, "lon": -46.6333, "label": "São Paulo"}
+
+
+def _weather_code_to_text(code: int) -> str:
+    """Tradução dos códigos WMO da Open-Meteo — mesma tabela do HUD (script.js,
+    weatherCodeToText()), duplicada aqui porque o orquestrador roda no backend, sem acesso
+    ao clima já carregado no navegador do usuário."""
+    if code == 0:
+        return "céu limpo"
+    if code <= 2:
+        return "poucas nuvens"
+    if code == 3:
+        return "nublado"
+    if code <= 48:
+        return "neblina"
+    if code <= 57:
+        return "garoa"
+    if code <= 67:
+        return "chuva"
+    if code <= 77:
+        return "neve"
+    if code <= 82:
+        return "pancadas de chuva"
+    if code <= 99:
+        return "tempestade"
+    return "condição desconhecida"
+
+
+async def _get_weather(city: str | None) -> dict[str, Any]:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        if city:
+            geo_response = await client.get(
+                "https://geocoding-api.open-meteo.com/v1/search",
+                params={"name": city, "count": 1, "language": "pt"},
+            )
+            geo_response.raise_for_status()
+            results = geo_response.json().get("results") or []
+            if not results:
+                return {"error": f'Não encontrei a cidade "{city}".'}
+            location = {"lat": results[0]["latitude"], "lon": results[0]["longitude"], "label": results[0]["name"]}
+        else:
+            location = _DEFAULT_WEATHER_LOCATION
+
+        forecast_response = await client.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": location["lat"],
+                "longitude": location["lon"],
+                "current": "temperature_2m,weather_code",
+                "daily": "precipitation_probability_max",
+                "timezone": "auto",
+            },
+        )
+        forecast_response.raise_for_status()
+        data = forecast_response.json()
+
+    rain_chance = (data.get("daily", {}).get("precipitation_probability_max") or [None])[0]
+    return {
+        "city": location["label"],
+        "temperature_celsius": round(data["current"]["temperature_2m"]),
+        "condition": _weather_code_to_text(data["current"]["weather_code"]),
+        "rain_chance_percent": rain_chance,
+    }
 
 
 def _content_hash(*parts: str) -> str:
@@ -123,6 +191,19 @@ TOOLS: list[dict[str, Any]] = [
             "required": ["name"],
         },
     },
+    {
+        "name": "get_weather",
+        "description": (
+            "Consulta o clima atual (temperatura, condição, chance de chuva hoje) de uma "
+            "cidade. Sem `city`, usa São Paulo como padrão. Use sempre que o usuário "
+            "perguntar sobre temperatura, clima ou previsão do tempo — nunca invente ou "
+            "diga que não tem acesso, essa ferramenta existe exatamente pra isso."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"city": {"type": "string", "default": ""}},
+        },
+    },
 ]
 
 
@@ -181,4 +262,6 @@ async def _dispatch(name: str, tool_input: dict[str, Any]) -> Any:
             email=tool_input.get("email", ""),
             phone=tool_input.get("phone", ""),
         )
+    if name == "get_weather":
+        return await _get_weather(tool_input.get("city") or None)
     raise ValueError(f"Tool desconhecida: {name}")

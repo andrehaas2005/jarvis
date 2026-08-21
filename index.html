@@ -129,6 +129,14 @@
                             <button class="settings-btn" id="settingsLLMSave">SALVAR</button>
                             <span class="settings-llm-status" id="settingsLLMStatus"></span>
                         </div>
+                        <!-- Aviso achado no SCRUM-58: escolher Ollama sem um servidor de verdade
+                             rodando derruba TODAS as tools (Gmail/Calendar/Contacts também), não
+                             só o clima — o orquestrador inteiro passa a depender dessa conexão. -->
+                        <p class="settings-section-hint" id="settingsLLMOllamaWarning" hidden>
+                            ⚠️ Ollama precisa de um servidor rodando e acessível pelo backend (hoje
+                            não instalado no servidor de produção) — sem isso, TODAS as ferramentas
+                            (email, agenda, contatos) param de funcionar, não só o modelo.
+                        </p>
                     </section>
                 </div>
             </div>
@@ -203,6 +211,14 @@
                     <div class="credits-header">
                         <span class="credits-label">ANTHROPIC</span>
                         <span class="credits-value" id="creditsValueAnthropic">--</span>
+                    </div>
+                </div>
+                <!-- Modelo de IA ativo (SCRUM-58) — usuário pediu pra ver aqui direto se uma troca
+                     na Settings Page realmente foi salva, sem precisar reabrir o modal. -->
+                <div class="credits-item">
+                    <div class="credits-header">
+                        <span class="credits-label">MODELO IA</span>
+                        <span class="credits-value" id="creditsValueModel">--</span>
                     </div>
                 </div>
             </div>
