@@ -1153,6 +1153,38 @@ class JARVISInterface {
     // rastreado no backend (não um ping sintético), ver status_tracker.py. Nasceu do SCRUM-52:
     // o Jarvis dizia "não tenho acesso" por voz sem dar nenhum jeito de confirmar rápido se
     // era bug de verdade ou o modelo alucinando.
+    // Botão "testar conexão" (SCRUM-60) — chamada real e silenciosa contra o serviço, sob
+    // demanda (POST /status/connect). Não lista dado nenhum: só troca o dot pra verde/vermelho
+    // e atualiza o detalhe. Reaproveita o mesmo botão pra estado "testando" (ícone girando).
+    async testServiceConnection(capability) {
+        const btn = document.getElementById(`checkinTest-${capability}`);
+        const dot = document.getElementById(`checkinDot-${capability}`);
+        const detail = document.getElementById(`checkinDetail-${capability}`);
+        if (!btn || btn.disabled) return;
+
+        btn.disabled = true;
+        btn.classList.add('testing');
+        try {
+            const response = await fetch(`${JARVIS_BACKEND_URL}/status/connect`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ service: capability }),
+            });
+            const data = await response.json();
+            if (dot) {
+                dot.classList.remove('status-ok', 'status-erro');
+                dot.classList.add(data.connected ? 'status-ok' : 'status-erro');
+            }
+            if (detail) detail.textContent = data.connected ? 'conectado (teste)' : (data.error || 'falhou');
+        } catch (error) {
+            console.warn(`Falha ao testar conexão de ${capability}:`, error.message);
+            if (detail) detail.textContent = 'erro ao testar';
+        } finally {
+            btn.disabled = false;
+            btn.classList.remove('testing');
+        }
+    }
+
     async loadStatusCheckin() {
         try {
             const response = await fetch(`${JARVIS_BACKEND_URL}/status/checkin`);
@@ -1347,6 +1379,12 @@ class JARVISInterface {
         // Sair (SCRUM-56) — limpa a sessão salva e volta pro login.
         if (this.topbarLogout) {
             this.topbarLogout.addEventListener('click', () => this.logout());
+        }
+
+        // Botão "testar conexão" por serviço (SCRUM-60).
+        for (const capability of this.checkinCapabilities) {
+            const btn = document.getElementById(`checkinTest-${capability}`);
+            if (btn) btn.addEventListener('click', () => this.testServiceConnection(capability));
         }
 
         // Clique no botão liga/desliga a conversa com o agente ElevenLabs

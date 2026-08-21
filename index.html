@@ -207,17 +207,24 @@
              gráficos decorativos (SCRUM-52) — dado real de uso, não enfeite. -->
         <div class="hud-panel left-side">
             <div class="checkin-systems" id="checkinSystems">
+                <!-- Botão "testar conexão" (SCRUM-60): chamada real e silenciosa contra o
+                     serviço agora, sob demanda — não lista nada, só confirma a conexão e
+                     colore o indicador. Diferente do dot em si, que é check-in passivo
+                     (uso real numa conversa, ver loadStatusCheckin()). -->
                 <div class="checkin-item" data-capability="email">
+                    <button class="checkin-test-btn" id="checkinTest-email" title="Testar conexão">⟳</button>
                     <span class="checkin-dot" id="checkinDot-email"></span>
                     <span class="checkin-text">EMAIL</span>
                     <span class="checkin-detail" id="checkinDetail-email">sem dados</span>
                 </div>
                 <div class="checkin-item" data-capability="calendar">
+                    <button class="checkin-test-btn" id="checkinTest-calendar" title="Testar conexão">⟳</button>
                     <span class="checkin-dot" id="checkinDot-calendar"></span>
                     <span class="checkin-text">AGENDA</span>
                     <span class="checkin-detail" id="checkinDetail-calendar">sem dados</span>
                 </div>
                 <div class="checkin-item" data-capability="contacts">
+                    <button class="checkin-test-btn" id="checkinTest-contacts" title="Testar conexão">⟳</button>
                     <span class="checkin-dot" id="checkinDot-contacts"></span>
                     <span class="checkin-text">CONTATOS</span>
                     <span class="checkin-detail" id="checkinDetail-contacts">sem dados</span>
