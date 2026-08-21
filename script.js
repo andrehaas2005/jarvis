@@ -22,10 +22,10 @@ const BACKGROUND_MUSIC_SRC = 'assets/music/background.mp3';
 const BACKGROUND_MUSIC_DEFAULT_VOLUME = 0.1;
 
 // Frases de ativação por voz — diga qualquer uma delas com o microfone liberado (fora de uma
-// conversa) que o Jarvis inicia a conversa sozinho, sem precisar clicar em "Sistema Ativo". Fonte
-// única: usada tanto pro reconhecimento (comparada via normalizeSpeech — acento/maiúscula/pontuação
-// não importam na hora de falar) quanto pra lista exibida no HUD (ver renderWakePhrasesList()).
-const WAKE_PHRASES = [
+// conversa) que o Jarvis inicia a conversa sozinho, sem precisar clicar em "Sistema Ativo". Esta
+// é só a lista PADRÃO (SCRUM-21: a Settings Page permite adicionar/remover frases próprias, salvas
+// em localStorage — ver loadWakePhrases()/this.wakePhrases, a fonte que realmente importa agora).
+const DEFAULT_WAKE_PHRASES = [
     'Jarvis, ativar',
     'E aí, Jarvis',
     'Jarvis, está me ouvindo?',
@@ -33,6 +33,7 @@ const WAKE_PHRASES = [
     'Jarvis, vamos conversar?',
     'Jarvis, você está pronto?',
 ];
+const WAKE_PHRASES_STORAGE_KEY = 'jarvis-wake-phrases';
 
 class JARVISInterface {
     constructor() {
@@ -107,6 +108,23 @@ class JARVISInterface {
         // Quem está logado (SCRUM-56) — ver checkAuthSession()/renderLoggedInUser() mais abaixo.
         this.topbarUserName = document.getElementById('topbarUserName');
         this.topbarLogout = document.getElementById('topbarLogout');
+
+        // Settings Page (SCRUM-20/21/22/23) — ver setupSettingsModal() mais abaixo.
+        this.topbarSettings = document.getElementById('topbarSettings');
+        this.settingsOverlay = document.getElementById('settingsOverlay');
+        this.settingsClose = document.getElementById('settingsClose');
+        this.settingsPhraseList = document.getElementById('settingsPhraseList');
+        this.settingsPhraseInput = document.getElementById('settingsPhraseInput');
+        this.settingsPhraseAdd = document.getElementById('settingsPhraseAdd');
+        this.settingsPhraseReset = document.getElementById('settingsPhraseReset');
+        this.settingsPlaylist = document.getElementById('settingsPlaylist');
+        this.settingsMusicInput = document.getElementById('settingsMusicInput');
+        this.settingsMusicAdd = document.getElementById('settingsMusicAdd');
+        this.settingsLLMProvider = document.getElementById('settingsLLMProvider');
+        this.settingsLLMModel = document.getElementById('settingsLLMModel');
+        this.settingsLLMSave = document.getElementById('settingsLLMSave');
+        this.settingsLLMStatus = document.getElementById('settingsLLMStatus');
+
         this.conversationStartedAt = null;
         this.messageCount = 0;
         this.durationTimerId = null;
@@ -121,6 +139,7 @@ class JARVISInterface {
         this.wakeRecognizer = null;
         this.wakeListening = false; // reflete se o reconhecimento está de fato rodando agora
         this.wakeEnabled = true; // liga/desliga a funcionalidade (botão da topbar)
+        this.wakePhrases = this.loadWakePhrases(); // SCRUM-21 — customizável na Settings Page
 
         // Música de fundo (ver BACKGROUND_MUSIC_SRC no topo do arquivo)
         this.bgMusic = document.getElementById('bgMusicPlayer');
@@ -130,6 +149,10 @@ class JARVISInterface {
         this.musicEnabled = localStorage.getItem('jarvis-music-enabled') !== 'false'; // ligada por padrão
         this.customMusicObjectUrl = null; // faixa trocada pelo botão 📁 — só dura a sessão atual
         this.musicFileMissing = false; // evita spam de aviso se o mp3 não existir
+        // Playlist (Settings Page, SCRUM-22) — { name, url } por faixa adicionada; só dura a
+        // sessão atual (arquivos locais, não ficam salvos no navegador entre recarregamentos).
+        this.musicPlaylist = [];
+        this.musicPlaylistIndex = -1;
         this.vuMusic = document.getElementById('vuMusic');
         this.musicVolumeSlider = document.getElementById('musicVolumeSlider');
         this.musicVolumeValue = document.getElementById('musicVolumeValue');
@@ -190,6 +213,7 @@ class JARVISInterface {
         this.setupBackgroundMusic();
         this.setupWakeWordListener();
         this.setupVisionPreviewDrag();
+        this.setupSettingsModal();
     }
 
     // ------------------------------------------------------------------
@@ -327,6 +351,13 @@ class JARVISInterface {
             this.musicFileMissing = true;
             this.pushLog('[MÚSICA] Nenhum arquivo encontrado em assets/music/background.mp3');
         };
+        // Com playlist (2+ faixas via Settings Page), cada faixa toca uma vez e passa pra
+        // próxima ao terminar — sem playlist, mantém o comportamento original (loop na mesma
+        // faixa, `loop` já está no <audio> do index.html).
+        this.bgMusic.addEventListener('ended', () => {
+            if (this.musicPlaylist.length < 2) return;
+            this.playPlaylistTrack((this.musicPlaylistIndex + 1) % this.musicPlaylist.length);
+        });
 
         // Botão MÚSICA liga/desliga (preferência salva — persiste entre sessões)
         this.syncMusicButton();
@@ -478,10 +509,272 @@ class JARVISInterface {
     }
 
     // ------------------------------------------------------------------
+    // Playlist de música (Settings Page, SCRUM-22)
+    // ------------------------------------------------------------------
+
+    // Acrescenta arquivos locais escolhidos à playlist (não substitui — cada chamada soma).
+    addMusicFiles(fileList) {
+        const files = Array.from(fileList || []);
+        if (files.length === 0) return;
+        files.forEach((file) => {
+            this.musicPlaylist.push({ name: file.name, url: URL.createObjectURL(file) });
+        });
+        this.renderSettingsPlaylist();
+        this.pushLog(`[MÚSICA] ${files.length} faixa(s) adicionada(s) à playlist`);
+        // Primeira faixa adicionada nesta sessão (playlist estava vazia): já toca ela.
+        if (this.musicPlaylistIndex === -1) this.playPlaylistTrack(0);
+    }
+
+    playPlaylistTrack(index) {
+        const track = this.musicPlaylist[index];
+        if (!track || !this.bgMusic) return;
+        if (this.customMusicObjectUrl && this.customMusicObjectUrl !== track.url) {
+            URL.revokeObjectURL(this.customMusicObjectUrl);
+        }
+        this.musicPlaylistIndex = index;
+        this.customMusicObjectUrl = track.url;
+        this.musicFileMissing = false;
+        // 2+ faixas: cada uma toca uma vez e passa pra próxima (ver listener 'ended' em
+        // setupBackgroundMusic). Só 1 faixa: comportamento original, fica em loop.
+        this.bgMusic.loop = this.musicPlaylist.length < 2;
+        this.bgMusic.src = track.url;
+        this.pushLog(`[MÚSICA] Tocando "${track.name}"`);
+        this.renderSettingsPlaylist();
+        if (this.musicEnabled && this.conversationActive) this.playBackgroundMusic();
+    }
+
+    removeMusicTrack(index) {
+        const track = this.musicPlaylist[index];
+        if (!track) return;
+        URL.revokeObjectURL(track.url);
+        this.musicPlaylist.splice(index, 1);
+        if (this.musicPlaylistIndex === index) {
+            this.musicPlaylistIndex = -1;
+            this.customMusicObjectUrl = null;
+            this.bgMusic.loop = true;
+            this.bgMusic.src = BACKGROUND_MUSIC_SRC;
+            this.stopBackgroundMusic();
+        } else if (this.musicPlaylistIndex > index) {
+            this.musicPlaylistIndex -= 1;
+        }
+        this.renderSettingsPlaylist();
+    }
+
+    renderSettingsPlaylist() {
+        if (!this.settingsPlaylist) return;
+        if (this.musicPlaylist.length === 0) {
+            this.settingsPlaylist.innerHTML = '<li style="opacity:0.5">Nenhuma faixa adicionada — usando a faixa padrão.</li>';
+            return;
+        }
+        this.settingsPlaylist.innerHTML = this.musicPlaylist
+            .map((track, index) => `
+                <li class="${index === this.musicPlaylistIndex ? 'playing' : ''}" data-index="${index}">
+                    <span class="settings-playlist-name" data-play="${index}">${index === this.musicPlaylistIndex ? '▶ ' : ''}${this.escapeHtml(track.name)}</span>
+                    <button class="settings-item-remove" data-remove="${index}" title="Remover">&times;</button>
+                </li>
+            `)
+            .join('');
+    }
+
+    // ------------------------------------------------------------------
+    // Settings Page (SCRUM-20/21/22/23) — modal com 3 seções independentes:
+    // frases de ativação, playlist de música, modelo de IA do orquestrador.
+    // ------------------------------------------------------------------
+
+    setupSettingsModal() {
+        this.renderSettingsPhrases();
+        this.renderSettingsPlaylist();
+
+        if (this.topbarSettings) {
+            this.topbarSettings.addEventListener('click', () => this.openSettingsModal());
+        }
+        if (this.settingsClose) {
+            this.settingsClose.addEventListener('click', () => this.closeSettingsModal());
+        }
+        if (this.settingsOverlay) {
+            // Clique fora do card fecha (mesmo padrão de outros overlays do HUD).
+            this.settingsOverlay.addEventListener('click', (event) => {
+                if (event.target === this.settingsOverlay) this.closeSettingsModal();
+            });
+        }
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && this.settingsOverlay && !this.settingsOverlay.hidden) {
+                this.closeSettingsModal();
+            }
+        });
+
+        // Seção 1: frases de ativação
+        if (this.settingsPhraseAdd && this.settingsPhraseInput) {
+            const addPhrase = () => {
+                const phrase = this.settingsPhraseInput.value.trim();
+                if (!phrase) return;
+                if (this.wakePhrases.some((p) => p.toLowerCase() === phrase.toLowerCase())) {
+                    this.settingsPhraseInput.value = '';
+                    return;
+                }
+                this.wakePhrases.push(phrase);
+                this.saveWakePhrases();
+                this.renderSettingsPhrases();
+                this.renderWakePhrasesPopover();
+                this.settingsPhraseInput.value = '';
+                this.pushLog(`[CONFIG] Frase de ativação adicionada: "${phrase}"`);
+            };
+            this.settingsPhraseAdd.addEventListener('click', addPhrase);
+            this.settingsPhraseInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') addPhrase();
+            });
+        }
+        if (this.settingsPhraseList) {
+            this.settingsPhraseList.addEventListener('click', (event) => {
+                const index = event.target.getAttribute('data-remove');
+                if (index === null) return;
+                this.wakePhrases.splice(Number(index), 1);
+                this.saveWakePhrases();
+                this.renderSettingsPhrases();
+                this.renderWakePhrasesPopover();
+            });
+        }
+        if (this.settingsPhraseReset) {
+            this.settingsPhraseReset.addEventListener('click', () => {
+                this.wakePhrases = [...DEFAULT_WAKE_PHRASES];
+                this.saveWakePhrases();
+                this.renderSettingsPhrases();
+                this.renderWakePhrasesPopover();
+                this.pushLog('[CONFIG] Frases de ativação restauradas para o padrão');
+            });
+        }
+
+        // Seção 2: playlist de música
+        if (this.settingsMusicAdd && this.settingsMusicInput) {
+            this.settingsMusicAdd.addEventListener('click', () => this.settingsMusicInput.click());
+            this.settingsMusicInput.addEventListener('change', () => {
+                this.addMusicFiles(this.settingsMusicInput.files);
+                this.settingsMusicInput.value = ''; // permite re-adicionar o mesmo arquivo depois
+            });
+        }
+        if (this.settingsPlaylist) {
+            this.settingsPlaylist.addEventListener('click', (event) => {
+                const playIndex = event.target.getAttribute('data-play');
+                const removeIndex = event.target.getAttribute('data-remove');
+                if (playIndex !== null) this.playPlaylistTrack(Number(playIndex));
+                if (removeIndex !== null) this.removeMusicTrack(Number(removeIndex));
+            });
+        }
+
+        // Seção 3: modelo de IA — só carrega quando o modal abre (evita chamada à toa)
+    }
+
+    renderSettingsPhrases() {
+        if (!this.settingsPhraseList) return;
+        this.settingsPhraseList.innerHTML = this.wakePhrases
+            .map((phrase, index) => `
+                <li>
+                    <span>"${this.escapeHtml(phrase)}"</span>
+                    <button class="settings-item-remove" data-remove="${index}" title="Remover">&times;</button>
+                </li>
+            `)
+            .join('');
+    }
+
+    openSettingsModal() {
+        if (!this.settingsOverlay) return;
+        this.settingsOverlay.hidden = false;
+        this.loadLLMSettings();
+    }
+
+    closeSettingsModal() {
+        if (this.settingsOverlay) this.settingsOverlay.hidden = true;
+    }
+
+    // Modelo de IA do orquestrador (SCRUM-23) — GET/PUT /settings/llm no backend, protegido pelo
+    // mesmo token do login (SCRUM-56). Qualquer usuário logado vê o modelo atual; só admin pode
+    // trocar (o campo/botão ficam desabilitados pros demais, com aviso no lugar da dica).
+    async loadLLMSettings() {
+        if (!this.settingsLLMProvider || !this.settingsLLMModel) return;
+        const token = localStorage.getItem('jarvis-auth-token');
+        let isAdmin = false;
+        try {
+            const user = JSON.parse(localStorage.getItem('jarvis-auth-user') || '{}');
+            isAdmin = user.role === 'admin';
+        } catch (error) {
+            // ignora — trata como não-admin
+        }
+
+        this.settingsLLMProvider.disabled = !isAdmin;
+        this.settingsLLMModel.disabled = !isAdmin;
+        if (this.settingsLLMSave) this.settingsLLMSave.disabled = !isAdmin;
+        const hint = document.getElementById('settingsLLMHint');
+        if (hint && !isAdmin) {
+            hint.textContent = 'Só o administrador pode trocar o modelo de IA — você pode ver qual está ativo.';
+        }
+
+        if (this.settingsLLMStatus) this.settingsLLMStatus.textContent = '';
+        try {
+            const response = await fetch(`${JARVIS_BACKEND_URL}/settings/llm`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            this.settingsLLMProvider.value = data.llm_provider;
+            this.settingsLLMModel.value = data.llm_model;
+        } catch (error) {
+            console.warn('Não deu pra carregar o modelo de IA atual:', error.message);
+            if (this.settingsLLMStatus) {
+                this.settingsLLMStatus.textContent = 'Não foi possível carregar';
+                this.settingsLLMStatus.classList.add('error');
+            }
+        }
+
+        if (this.settingsLLMSave && isAdmin) {
+            this.settingsLLMSave.onclick = () => this.saveLLMSettings();
+        }
+    }
+
+    async saveLLMSettings() {
+        const token = localStorage.getItem('jarvis-auth-token');
+        const provider = this.settingsLLMProvider.value;
+        const model = this.settingsLLMModel.value.trim();
+        if (!model) return;
+
+        this.settingsLLMSave.disabled = true;
+        if (this.settingsLLMStatus) {
+            this.settingsLLMStatus.textContent = 'Salvando...';
+            this.settingsLLMStatus.classList.remove('error');
+        }
+        try {
+            const response = await fetch(`${JARVIS_BACKEND_URL}/settings/llm`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ provider, model }),
+            });
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.detail || `HTTP ${response.status}`);
+            }
+            if (this.settingsLLMStatus) this.settingsLLMStatus.textContent = 'Salvo ✓';
+            this.pushLog(`[CONFIG] Modelo de IA trocado para ${provider}/${model}`);
+        } catch (error) {
+            if (this.settingsLLMStatus) {
+                this.settingsLLMStatus.textContent = error.message || 'Falha ao salvar';
+                this.settingsLLMStatus.classList.add('error');
+            }
+        } finally {
+            this.settingsLLMSave.disabled = false;
+        }
+    }
+
+    // Frase falada pra abrir a Settings Page — mesmo padrão de maybeHandleFullscreenCommand.
+    static SETTINGS_OPEN_REGEX = /abrir\s*(as\s*)?configura[çc][õo]es|abre\s*(as\s*)?configura[çc][õo]es|mostrar\s*(as\s*)?configura[çc][õo]es/i;
+
+    maybeHandleSettingsCommand(message) {
+        if (JARVISInterface.SETTINGS_OPEN_REGEX.test(message)) this.openSettingsModal();
+    }
+
+    // ------------------------------------------------------------------
     // Ativação por voz (wake word)
     // ------------------------------------------------------------------
 
-    // Normaliza acentos/pontuação pra comparar com WAKE_PHRASES sem depender de o reconhecedor
+    // Normaliza acentos/pontuação pra comparar com this.wakePhrases sem depender de o reconhecedor
     // acertar acentuação exata (ex.: "esta"/"está" viram a mesma coisa).
     static normalizeSpeech(text) {
         return text
@@ -493,14 +786,35 @@ class JARVISInterface {
             .trim();
     }
 
-    // Popover com a lista de frases (WAKE_PHRASES é a fonte única — nunca fica desatualizada).
-    // Funciona independente de o navegador suportar ativação por voz, já que é só informativo.
-    setupWakePhrasesPopover() {
-        if (this.wakePhrasesList) {
-            this.wakePhrasesList.innerHTML = WAKE_PHRASES
-                .map((phrase) => `<li>"${this.escapeHtml(phrase)}"</li>`)
-                .join('');
+    // Carrega as frases de ativação salvas (Settings Page, SCRUM-21) ou a lista padrão se o
+    // usuário nunca customizou nada. this.wakePhrases é a fonte única a partir daqui — tanto pro
+    // reconhecimento (startWakeWordListener) quanto pra exibição (popover e Settings Page).
+    loadWakePhrases() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(WAKE_PHRASES_STORAGE_KEY));
+            if (Array.isArray(saved) && saved.length > 0) return saved;
+        } catch (error) {
+            console.warn('Não deu pra ler as frases de ativação salvas:', error.message);
         }
+        return [...DEFAULT_WAKE_PHRASES];
+    }
+
+    saveWakePhrases() {
+        localStorage.setItem(WAKE_PHRASES_STORAGE_KEY, JSON.stringify(this.wakePhrases));
+    }
+
+    // Popover com a lista de frases — reflete this.wakePhrases, então nunca fica desatualizada
+    // em relação ao que a Settings Page salvou. Funciona independente de o navegador suportar
+    // ativação por voz, já que é só informativo.
+    renderWakePhrasesPopover() {
+        if (!this.wakePhrasesList) return;
+        this.wakePhrasesList.innerHTML = this.wakePhrases
+            .map((phrase) => `<li>"${this.escapeHtml(phrase)}"</li>`)
+            .join('');
+    }
+
+    setupWakePhrasesPopover() {
+        this.renderWakePhrasesPopover();
         if (!this.topbarWakeInfo || !this.wakePhrasesPopover) return;
         this.topbarWakeInfo.addEventListener('click', (event) => {
             event.stopPropagation();
@@ -585,7 +899,7 @@ class JARVISInterface {
 
             const rawHeard = `${this.wakeTranscriptBuffer} ${interim}`;
             const heard = JARVISInterface.normalizeSpeech(rawHeard);
-            const matchedPhrase = WAKE_PHRASES.find((phrase) => heard.includes(JARVISInterface.normalizeSpeech(phrase)));
+            const matchedPhrase = this.wakePhrases.find((phrase) => heard.includes(JARVISInterface.normalizeSpeech(phrase)));
             if (matchedPhrase) {
                 this.pushLog(`[VOZ] Frase de ativação reconhecida: "${matchedPhrase}"`);
                 this.wakeTranscriptBuffer = '';
@@ -1314,6 +1628,7 @@ class JARVISInterface {
                         this.maybeHandleVisionCommand(message);
                         this.maybeAutoLook(message);
                         this.maybeHandleFullscreenCommand(message);
+                        this.maybeHandleSettingsCommand(message);
                     }
                     this.messageCount++;
                     this.updateStatMessages();

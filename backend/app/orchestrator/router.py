@@ -21,6 +21,7 @@ from app.logging_config import get_logger
 from app.orchestrator.memory import get_session_memory
 from app.orchestrator.providers import get_provider
 from app.orchestrator.tools import TOOLS, execute_tool
+from app.settings_store import get_llm_config
 
 logger = get_logger("jarvis.orchestrator.router")
 
@@ -50,8 +51,14 @@ async def handle_query(query: str, session_id: str) -> str:
             "ANTHROPIC_API_KEY não configurada no .env (veja backend/.env.example)."
         )
 
+    # Provedor/modelo efetivos vêm do settings_store (editável pela Settings
+    # Page, SCRUM-23) — cai pro default do .env quando nunca foi trocado.
+    llm_config = get_llm_config()
     provider = get_provider(
-        settings.llm_provider, api_key=settings.anthropic_api_key, model=settings.anthropic_model
+        llm_config["llm_provider"],
+        api_key=settings.anthropic_api_key,
+        model=llm_config["llm_model"],
+        ollama_base_url=settings.ollama_base_url,
     )
 
     memory = get_session_memory()
