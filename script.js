@@ -156,9 +156,13 @@ class JARVISInterface {
                 { value: 'openai/gpt-oss-20b', label: 'Groq — GPT-OSS 20B, rápido e barato (~$0.075/$0.30 por milhão)' },
                 { value: 'openai/gpt-oss-120b', label: 'Groq — GPT-OSS 120B, mais capaz (~$0.15/$0.60 por milhão)' },
             ],
+            // gemini-2.5-flash-lite e gemini-2.5-flash (catálogo original, baseado em pesquisa
+            // de preço) devolviam 404 "no longer available to new users" testando de verdade —
+            // mesma lição da Groq: preço ≠ disponibilidade real. Modelos abaixo confirmados
+            // respondendo 200 em produção.
             'https://generativelanguage.googleapis.com/v1beta/openai': [
-                { value: 'gemini-2.5-flash-lite', label: 'Gemini — 2.5 Flash-Lite, o mais barato (~$0.10/$0.40 por milhão)' },
-                { value: 'gemini-2.5-flash', label: 'Gemini — 2.5 Flash, equilíbrio custo/qualidade (~$0.30/$2.50 por milhão)' },
+                { value: 'gemini-3.5-flash-lite', label: 'Gemini — 3.5 Flash-Lite, o mais barato' },
+                { value: 'gemini-3.5-flash', label: 'Gemini — 3.5 Flash, equilíbrio custo/qualidade' },
                 { value: 'gemini-3.7-flash', label: 'Gemini — 3.7 Flash, mais novo e capaz (~$0.75/$3.75 por milhão)' },
             ],
         };
