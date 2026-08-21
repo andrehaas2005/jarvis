@@ -142,10 +142,13 @@ class JARVISInterface {
                 { value: 'claude-opus-5', label: 'Opus 5 — mais capaz, pra tarefas complexas ($5/$25 por milhão)' },
                 { value: 'claude-haiku-4-5', label: 'Haiku 4.5 — mais rápido e barato ($1/$5 por milhão)' },
             ],
+            // Catálogo real verificado em produção (SCRUM-59): a lista de modelos da Groq muda
+            // com frequência — llama-3.1-8b-instant e llama-3.3-70b-versatile, por exemplo, já
+            // saíram do ar entre uma pesquisa e o teste real (model_not_found). Testado de
+            // ponta a ponta com sucesso: openai/gpt-oss-20b respondeu em ~3s.
             local: [
-                { value: 'llama-3.3-70b-versatile', label: 'Groq — Llama 3.3 70B, rápido e versátil (~$0.59/$0.79 por milhão)' },
-                { value: 'qwen/qwen3-32b', label: 'Groq — Qwen3 32B, bom em tool-calling (~$0.29/$0.59 por milhão)' },
-                { value: 'llama-3.1-8b-instant', label: 'Groq — Llama 3.1 8B, o mais barato e rápido (~$0.05/$0.08 por milhão)' },
+                { value: 'openai/gpt-oss-20b', label: 'Groq — GPT-OSS 20B, rápido e barato (~$0.075/$0.30 por milhão)' },
+                { value: 'openai/gpt-oss-120b', label: 'Groq — GPT-OSS 120B, mais capaz (~$0.15/$0.60 por milhão)' },
             ],
         };
 
