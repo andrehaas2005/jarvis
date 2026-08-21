@@ -1,7 +1,7 @@
 # 📋 JARVIS Roadmap - Sessão de Continuidade
 
 **Data de Criação:** 2026-08-19  
-**Última Atualização:** 2026-08-20 (sessão 4 — SCRUM-56/57: login do HUD em produção + fix de vision; **SCRUM-17 concluído: n8n desativado** — os 5 workflows JARVIS foram despublicados no n8n, SCRUM-45/46/47 fecham junto por dependerem dessa migração)  
+**Última Atualização:** 2026-08-21 (sessão 5 — SCRUM-58: bugfixes de clima/TTS; SCRUM-59: modelo de IA local configurável, serviço `jarvis-llamafile` em produção)  
 **Status Geral:** Sprint 1 Ativo ✅ — Backend Python rodando em produção (https://jarvis-api.andre.haas.nom.br), agora incluindo o orquestrador (`/jarvis/webhook`)
 
 ---
@@ -216,6 +216,25 @@ Testado local e em produção (`GET /settings/llm` retornando o default correto,
 - **Bug achado testando em produção:** timestamp injetado só tinha hora (sem data) — o modelo respondia certo mas inventava "você me falou ontem à tarde" pra um turno de segundos atrás. Fix: timestamp com data (`dd/mm HH:MM`) + instrução explícita no prompt pra usar a data real.
 
 Testado local (sessão A grava fato → sessão B, `conversation_id` diferente, pergunta sobre ele → resposta correta) e em produção pelo webhook real.
+
+---
+
+## 🚀 O que foi feito — SESSÃO 5 (SCRUM-58 bugfixes, SCRUM-59: modelo local configurável)
+
+### ✅ SCRUM-58 — Dois bugs relatados pelo usuário
+- **"Não tem acesso" a temperatura/clima:** faltava a tool. Adicionado `get_weather` em `backend/app/orchestrator/tools.py` (Open-Meteo, mesma API já usada no widget do HUD) — o modelo parava de responder que não tinha acesso.
+- **TTS "engasgando" ao falar a temperatura:** não era bug de voz/ElevenLabs — o texto do daily briefing (`script.js`, `buildDailyBriefingText()`) tinha vírgulas mal colocadas logo após "°C" e uma frase desatualizada sobre não ter acesso à agenda (defasada desde a migração pro MCP, SCRUM-18). Reescrito com frases curtas, "graus" por extenso.
+- **Causa raiz recorrente dos dois bugs de "erro genérico" em produção:** `GET /settings/llm` ficou com provider/model incompatíveis (`ollama`+`claude-opus-5`, depois `ollama`+`llama3.1` sem servidor rodando) — toda chamada de tool falhava. Corrigido restaurando `anthropic`/`claude-opus-5` via `PUT /settings/llm`, duas vezes.
+
+### ✅ SCRUM-59 — Modelo de IA local, livre escolha de servidor
+Pedido explícito do usuário: poder escolher entre VPS, Mac M1 ou qualquer outro modelo/servidor pela Settings Page, sem precisar mexer em código.
+
+- **Backend generalizado:** `OllamaProvider` (específico da API nativa do Ollama) virou `LocalOpenAICompatibleProvider` em `backend/app/orchestrator/providers.py` — fala o protocolo `/v1/chat/completions` (padrão OpenAI), que llamafile, Ollama, LM Studio e outros também expõem. `settings_store.py` ganhou `llm_base_url` (endereço do servidor), validado como obrigatório quando `provider == "local"`.
+- **Settings Page:** nova linha "Servidor" (preset "VPS (interno)" ou endereço customizado, ex.: Tailscale do Mac) — só aparece quando o provider é "local". Aviso explícito de que um modelo local só funciona com o servidor ligado e acessível **no momento exato** da chamada — sem isso, todas as ferramentas (email, agenda, contatos) param, não só o modelo.
+- **Painel de status/custo:** mostra o modelo ativo (`llm.model`/`llm.provider` em `GET /status/credits`), atualiza sozinho ao salvar a config.
+- **Serviço `jarvis-llamafile` em produção** (`Dockerfile.llamafile`, raiz do repo): container isolado na rede interna do compose, sem porta publicada — só `jarvis-backend` alcança via `http://jarvis-llamafile:8080`. Modelo: **Qwen3-4B-Instruct-2507** (Unsloth, Q4_K_M) — testado A/B contra a variante "Thinking" antes de decidir: Thinking gastava ~82s por decisão de tool-call (raciocínio verboso), Instruct faz o mesmo em ~10-15s, tool-calling correto. CPU-only (sem GPU no VPS).
+- **Bug de deploy encontrado e corrigido:** `CMD` do Dockerfile em forma array (`["./llamafile", ...]`) dava `exec format error` em produção — o binário llamafile é um "polyglot" (Cosmopolitan APE), só funciona chamado via shell (`sh -c "..."`), que interpreta o cabeçalho do arquivo como script antes de rodar o binário nativo por dentro. Corrigido, testado (health check + tool-calling reais via a rede interna do Docker).
+- **Produção continua no Anthropic por padrão** — o serviço local fica disponível como opção na Settings Page, mas a troca é decisão do usuário, não automática (duas quedas de produção nesta sessão já vieram de troca de provider mal configurada).
 
 ---
 
