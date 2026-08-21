@@ -16,6 +16,7 @@ from app.auth import User, authenticate, init_db, issue_token, verify_token
 from app.config import get_settings
 from app.elevenlabs import get_signed_conversation_url
 from app.logging_config import get_logger, setup_logging
+from app.orchestrator.connection_check import check_service
 from app.orchestrator.history_store import init_history_db
 from app.orchestrator.router import handle_query
 from app.presence import get_active_count, heartbeat
@@ -185,6 +186,27 @@ async def status_checkin() -> dict:
 async def status_credits() -> dict:
     """Consumo das APIs pagas (ElevenLabs, Anthropic) pro painel do HUD."""
     return await get_credits()
+
+
+class ConnectRequest(BaseModel):
+    service: str
+
+
+@app.post("/status/connect")
+async def status_connect(
+    body: ConnectRequest, authorization: str | None = Header(default=None)
+) -> dict:
+    """Botão de "testar conexão" por serviço (SCRUM-60) — chamada real e
+    silenciosa (não lista nada pro usuário) contra Email/Calendar/Contacts,
+    disparada sob demanda. Diferente do GET /status/checkin (passivo, só
+    reflete uso já feito numa conversa) — este dispara o teste agora, na
+    hora do clique. Exige login (não precisa ser admin — não muda config,
+    só lê)."""
+    _require_user(authorization)
+    try:
+        return await check_service(body.service)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/status/presence")

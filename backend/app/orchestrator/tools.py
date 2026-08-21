@@ -192,6 +192,18 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "check_service_connections",
+        "description": (
+            "Testa a conexão real com Email, Agenda e Contatos agora (chamada leve e "
+            "silenciosa, não lista nada) e diz quais estão conectados. Use quando o "
+            "usuário pedir para 'conectar os serviços', testar a conexão, ou verificar "
+            "se email/agenda/contatos estão funcionando. Depois de chamar, informe o "
+            "resultado de cada serviço por nome (ex.: 'Email — Conectado, Agenda — "
+            "Conectada, Contato — Não conectado')."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "get_weather",
         "description": (
             "Consulta o clima atual (temperatura, condição, chance de chuva hoje) de uma "
@@ -264,4 +276,9 @@ async def _dispatch(name: str, tool_input: dict[str, Any]) -> Any:
         )
     if name == "get_weather":
         return await _get_weather(tool_input.get("city") or None)
+    if name == "check_service_connections":
+        # import local pra evitar ciclo (connection_check importa execute_tool daqui)
+        from app.orchestrator.connection_check import check_all_connections
+
+        return await check_all_connections()
     raise ValueError(f"Tool desconhecida: {name}")

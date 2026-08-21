@@ -646,6 +646,44 @@ select.settings-input {
     font-family: 'Roboto', sans-serif;
 }
 
+/* Botão "testar conexão" (SCRUM-60) — antes do dot, discreto até o hover.
+   Estado "testando" gira o ícone (mesma animação usada em spinners do HUD). */
+.checkin-test-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    width: 14px;
+    height: 14px;
+    min-width: 14px;
+    font-size: 0.75rem;
+    line-height: 1;
+    color: var(--hud-text-dim);
+    opacity: 0.5;
+    cursor: pointer;
+    transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.checkin-test-btn:hover {
+    opacity: 1;
+    color: var(--hud-blue);
+}
+
+.checkin-test-btn:disabled {
+    cursor: default;
+    pointer-events: none;
+}
+
+.checkin-test-btn.testing {
+    opacity: 1;
+    color: var(--hud-blue);
+    animation: checkin-test-spin 0.8s linear infinite;
+}
+
+@keyframes checkin-test-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 /* Quantas abas/dispositivos têm o HUD aberto agora — ver loadPresenceHeartbeat()
    em script.js. */
 .presence-item {
