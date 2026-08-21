@@ -27,6 +27,17 @@ settings = get_settings()
 setup_logging(settings.jarvis_log_level)
 logger = get_logger("jarvis.main")
 
+# Monitoramento (SCRUM-39) — rastreamento de erro real em produção. Antes disso, um bug só
+# aparecia se alguém fosse catar log manualmente no Web Terminal do VPS (foi assim que vários
+# bugs reais foram achados nesta sessão) — agora qualquer exceção não tratada chega aqui
+# automaticamente (integração FastAPI/Starlette do sentry-sdk detecta sozinha). Sem
+# `SENTRY_DSN` configurada, isso é um no-op — comportamento de antes, sem mudança.
+if settings.sentry_dsn:
+    import sentry_sdk
+
+    sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.jarvis_env, traces_sample_rate=0.1)
+    logger.info("sentry_enabled")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
