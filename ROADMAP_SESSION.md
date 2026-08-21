@@ -1,7 +1,7 @@
 # 📋 JARVIS Roadmap - Sessão de Continuidade
 
 **Data de Criação:** 2026-08-19  
-**Última Atualização:** 2026-08-20 (sessão 3 — SCRUM-17/52/53/54: orquestrador em produção, bug de confiabilidade por voz corrigido, painel de status/créditos e HUD responsivo mobile; n8n ainda ativo até desativação explícita)  
+**Última Atualização:** 2026-08-20 (sessão 4 — SCRUM-56/57: login do HUD em produção + fix de vision; **SCRUM-17 concluído: n8n desativado** — os 5 workflows JARVIS foram despublicados no n8n, SCRUM-45/46/47 fecham junto por dependerem dessa migração)  
 **Status Geral:** Sprint 1 Ativo ✅ — Backend Python rodando em produção (https://jarvis-api.andre.haas.nom.br), agora incluindo o orquestrador (`/jarvis/webhook`)
 
 ---
@@ -116,9 +116,11 @@ O agente de voz do ElevenLabs tinha **uma única ferramenta**: um webhook POST p
   - Confirmação antes de ação destrutiva: 1ª msg pede confirmação, 2ª msg (mesma sessão) executa — memória multi-turn OK
   - **Conversa real via preview do ElevenLabs:** "qual o email da Maria Aparecida?" → agente chamou `jarvis_backend` → resolveu via Contacts → resposta certa
 
-### ⚠️ Pendente
-- **Desativar (não deletar) os workflows JARVIS no n8n**: `JARVIS`, `Email Agent Tool`, `Calendar Agent Tool`, `Contacts Agent Tool`, `Content Creator Agent Tool` — só esses, o resto do n8n (outros projetos no mesmo Hostinger) continua rodando normal
-- Só depois disso os SCRUM-45/46/47 fecham como **Concluído** de vez
+### ✅ Concluído (sessão 4) — n8n desativado
+Os 5 workflows JARVIS foram **desativados** (não deletados) no n8n: `JARVIS`, `Email Agent Tool`, `Calendar Agent Tool`, `Contacts Agent Tool`, `Content Creator Agent Tool` — via "Unpublish" (n8n 2.32.6 usa publish/unpublish em vez do toggle Active clássico; "Unpublish" impede execuções em produção sem apagar o workflow). Confirmado na listagem: nenhum dos 5 mostra mais o badge "Published". O resto do n8n (outros projetos no mesmo Hostinger, incluindo `WF Error Alert - Jarvis` que não é do JARVIS) continua rodando normal.
+
+SCRUM-17, 45, 46 e 47 fechados como **Concluído** — SCRUM-47 (lookup de contato no Calendar Agent) também resolvido de fato: o orquestrador novo (`tools.py`) expõe `search_contact` e `create_event` como tools do mesmo LLM na mesma conversa, diferente do n8n onde o Calendar Agent não tinha acesso a lookup de contato nenhum.
+
 - Monitorar taxa de erro/latência do `jarvis_backend` no painel do ElevenLabs nos próximos dias, comparando com os 17.9%/9.5s do n8n antigo
 
 ### ✅ HUD (frontend) também deployado em produção (SCRUM-34)
@@ -200,11 +202,11 @@ Deploy bem-sucedido em PRODUÇÃO
 ## 📊 Próximas Ações (Ordem de Prioridade)
 
 ### IMEDIATO (Sprint 1) — retomar por aqui
-1. **SCRUM-17** — Desativar os workflows JARVIS no n8n (endpoint novo já testado por voz em produção — ver sessão 3)
+1. ~~**SCRUM-17** — Desativar os workflows JARVIS no n8n~~ — **feito** (sessão 4): 5 workflows despublicados, SCRUM-17/45/46/47 concluídos
 2. ~~Testar o HUD (frontend) apontando pro backend de produção~~ — **feito** (sessão 3, SCRUM-34): HUD deployado em https://jarvis-hud.andre.haas.nom.br, `script.js` detecta local vs. produção sozinho
 
 ### CURTO PRAZO (Fim Sprint 1)
-5. **SCRUM-20-23** — Settings Page
+5. **SCRUM-20-23** — Settings Page (inclui a página de configuração de usuários prevista como fase 2 do SCRUM-56/login)
 6. **SCRUM-24-25** — Sistema de Memória (Nível 1-2)
 
 ---
