@@ -207,6 +207,19 @@ class LocalOpenAICompatibleProvider(LLMProvider):
                 )
                 if response.status_code == 429:
                     raise RateLimitedError(response.text)
+                if response.status_code >= 400:
+                    # Corpo da resposta de erro (a mensagem exata do provedor, ex.: qual
+                    # campo/formato ele rejeitou) não aparecia nos logs antes — só o
+                    # "400 Bad Request" genérico do httpx, sem contexto pra debugar.
+                    logger.warning(
+                        "orchestrator_local_provider_error",
+                        extra={
+                            "extra_fields": {
+                                "status_code": response.status_code,
+                                "body": response.text[:2000],
+                            }
+                        },
+                    )
                 response.raise_for_status()
                 data = response.json()
                 message = data["choices"][0]["message"]
