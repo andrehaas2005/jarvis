@@ -1,0 +1,37 @@
+# Modelo local (SCRUM-59) — llamafile + qwen3-4b-instruct (Unsloth, Q4_K_M), rodando como
+# serviço próprio no docker-compose de produção, isolado na mesma rede do jarvis-backend (sem
+# porta publicada pro host nem pra internet — só o backend alcança em http://jarvis-llamafile:8080).
+#
+# Os arquivos (~2.85GB) NÃO ficam no repo (ver .gitignore, assets/model/) — este Dockerfile
+# baixa direto das fontes originais na hora do build: llamafile do GitHub releases (Mozilla-Ocho)
+# e o .gguf do Hugging Face.
+#
+# Qwen3-4B-INSTRUCT (não a variante "Thinking"): testado direto no VPS antes de decidir —
+# a variante Thinking gastava ~82s só pra decidir chamar 1 tool (gera bastante raciocínio
+# antes de responder, ruim pra voz). A Instruct faz a mesma decisão em ~10s, resposta limpa,
+# sem racionínio verboso. Ainda mais lento que a nuvem (CPU-only, sem GPU no VPS), mas
+# genuinamente usável — ver aviso na Settings Page.
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN curl -L -o llamafile \
+    "https://github.com/Mozilla-Ocho/llamafile/releases/download/0.10.5/llamafile-0.10.5" \
+    && chmod +x llamafile
+
+RUN curl -L -o model.gguf \
+    "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
+
+EXPOSE 8080
+
+# --server: modo servidor HTTP only, API compatível com OpenAI em /v1/chat/completions
+#   (confirmado via `llamafile --help` — não abre TUI/navegador nesse modo, então sem
+#   necessidade de flag extra pra suprimir isso).
+# --host 0.0.0.0: precisa ouvir em todas as interfaces pra ser alcançável por outro container
+#   na mesma rede docker — sem porta publicada pro host, só é alcançável de dentro da rede
+#   interna do compose (ver docker-compose.yml no servidor).
+# -ngl 0: força CPU-only (sem GPU no VPS)
+CMD ["./llamafile", "-m", "model.gguf", "--server", "--host", "0.0.0.0", "--port", "8080", "-ngl", "0"]
