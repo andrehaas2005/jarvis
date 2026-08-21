@@ -1,0 +1,70 @@
+# CI/CD (SCRUM-38) — substitui o build+deploy manual que vinha sendo feito
+# à mão no Web Terminal do VPS toda vez (git pull + docker compose build +
+# up), repetido dezenas de vezes ao longo do desenvolvimento. Todo push em
+# `main` roda os testes; se passar, faz o deploy automático de
+# jarvis-backend e jarvis-frontend em produção.
+#
+# jarvis-llamafile (modelo local no VPS) fica de fora de propósito: rebuild
+# baixa ~2.85GB (llamafile + .gguf) toda vez, e o serviço é usado raramente
+# (achado em produção: 2 vCPU é lento demais pra voz — ver ROADMAP_SESSION.md,
+# SCRUM-59). Rebuild dele continua manual, via Web Terminal.
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    name: Testes (sintaxe/import)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências do backend
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Checar sintaxe + import do backend
+        working-directory: backend
+        run: |
+          python -m compileall app mcp_servers -q
+          python -c "import app.main; print('import OK')"
+
+      - name: Checar sintaxe do frontend (JS)
+        run: |
+          node --check script.js
+          node --check gestures.js
+          node --check visualizer3d.js
+          node --check login.js
+
+  deploy:
+    name: Deploy em produção
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Rebuild + restart jarvis-backend e jarvis-frontend no VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd /root/jarvis-repo
+            git fetch origin main
+            git reset --hard origin/main
+            cd /root
+            docker compose build jarvis-backend jarvis-frontend
+            docker compose up -d jarvis-backend jarvis-frontend
+
+      - name: Checar saúde do backend após o deploy
+        run: |
+          sleep 5
+          curl -sf https://jarvis-api.andre.haas.nom.br/status/checkin > /dev/null && echo "backend OK"
