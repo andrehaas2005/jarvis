@@ -73,6 +73,7 @@ async def handle_query(query: str, session_id: str) -> str:
         api_key=settings.anthropic_api_key,
         model=llm_config["llm_model"],
         base_url=llm_config["llm_base_url"],
+        local_api_key=llm_config["llm_api_key"],
     )
 
     memory = get_session_memory()

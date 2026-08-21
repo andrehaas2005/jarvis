@@ -19,7 +19,7 @@ from app.logging_config import get_logger, setup_logging
 from app.orchestrator.history_store import init_history_db
 from app.orchestrator.router import handle_query
 from app.presence import get_active_count, heartbeat
-from app.settings_store import get_llm_config, set_llm_config
+from app.settings_store import get_llm_config_public, set_llm_config
 from app.status import get_checkin, get_credits
 
 settings = get_settings()
@@ -137,32 +137,38 @@ class LLMSettingsRequest(BaseModel):
     provider: str
     model: str
     base_url: str = ""
+    # Chave do provedor 'local' (Groq/DeepInfra/etc. — quando exigem
+    # autenticação; vazio pro llamafile do próprio VPS). Vazio também
+    # significa "não mudar a já salva" — ver settings_store.set_llm_config.
+    api_key: str = ""
 
 
 @app.get("/settings/llm")
 async def settings_llm_get(authorization: str | None = Header(default=None)) -> dict:
     """Provedor/modelo/endereço de IA em uso agora (Settings Page,
     SCRUM-23/59). Qualquer usuário logado pode ver — só admin pode trocar
-    (ver PUT abaixo)."""
+    (ver PUT abaixo). Nunca devolve a api_key em texto puro — só
+    `llm_api_key_set` (booleano), ver settings_store.get_llm_config_public."""
     _require_user(authorization)
-    return get_llm_config()
+    return get_llm_config_public()
 
 
 @app.put("/settings/llm")
 async def settings_llm_put(
     body: LLMSettingsRequest, authorization: str | None = Header(default=None)
 ) -> dict:
-    """Troca o provedor/modelo/endereço do orquestrador em runtime, sem
-    restart — afeta todas as conversas (não é por usuário, ver
+    """Troca o provedor/modelo/endereço/chave do orquestrador em runtime,
+    sem restart — afeta todas as conversas (não é por usuário, ver
     settings_store.py). `provider`/`model`/`base_url` aceitam qualquer
     valor: não travamos numa lista fixa porque servidores novos (VPS, Mac
-    do usuário via Tailscale, Anthropic futuro) não devem exigir alterar
-    código pra ficarem selecionáveis."""
+    do usuário via Tailscale, Groq/DeepInfra, Anthropic futuro) não devem
+    exigir alterar código pra ficarem selecionáveis."""
     user = _require_user(authorization)
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Só admin pode trocar o modelo de IA")
     try:
-        return set_llm_config(provider=body.provider, model=body.model, base_url=body.base_url)
+        set_llm_config(provider=body.provider, model=body.model, base_url=body.base_url, api_key=body.api_key)
+        return get_llm_config_public()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

@@ -32,7 +32,10 @@ class Settings(BaseSettings):
     # Orquestrador (SCRUM-17) — substitui o node "JARVIS" do n8n
     llm_provider: str = "anthropic"
     anthropic_api_key: str | None = None
-    anthropic_model: str = "claude-opus-5"
+    # Sonnet 5 por padrão (SCRUM-59): ~5-6x mais barato que Opus 5, qualidade
+    # ótima pro caso de uso de voz — Opus continua selecionável na Settings
+    # Page pra quem quiser gastar mais por respostas potencialmente melhores.
+    anthropic_model: str = "claude-sonnet-5"
     jarvis_webhook_secret: str | None = None
 
     # Painel de créditos (HUD) — Admin API key, só leitura de uso/custo.
