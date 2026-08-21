@@ -48,9 +48,11 @@ Você é um assistente pessoal. Seu trabalho é chamar a ferramenta correta pra 
 _RECENT_HISTORY_SECTION_TEMPLATE = """
 ## Conversas recentes (últimas 24h, fora desta sessão)
 Isto é o que vocês conversaram nas últimas 24 horas, possivelmente em outra ligação — não é
-o histórico desta conversa (esse já está acima, nas mensagens). Use só como contexto pra não
-perguntar de novo algo que você já sabe, ou pra continuar um assunto em aberto — nunca cite
-literalmente esta lista para o usuário, aja como se você só "lembrasse".
+o histórico desta conversa (esse já está acima, nas mensagens). Cada linha tem data e hora
+reais (formato dd/mm hh:mm, mesmo fuso do "Data/hora atual" acima) — use isso pra situar
+quando foi de verdade (hoje mais cedo, ontem etc.) em vez de chutar. Use só como contexto pra
+não perguntar de novo algo que você já sabe, ou pra continuar um assunto em aberto — nunca
+cite literalmente esta lista para o usuário, aja como se você só "lembrasse".
 {history}
 """
 

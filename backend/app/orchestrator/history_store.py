@@ -104,7 +104,9 @@ def get_recent_summary() -> str:
 
     lines = []
     for row in reversed(rows):  # ordem cronológica no prompt, mais fácil do modelo seguir
-        hora = time.strftime("%H:%M", time.localtime(row["created_at"]))
+        # Data + hora (não só hora): sem a data, o modelo já inventou "ontem à tarde" pra um
+        # turno de segundos atrás — só a hora não dá pra ele situar quando foi de verdade.
+        hora = time.strftime("%d/%m %H:%M", time.localtime(row["created_at"]))
         # Corta cada lado pra não deixar um turno gigante engolir o orçamento de contexto.
         query = row["query"][:300]
         response = row["response"][:300]
