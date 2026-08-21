@@ -120,13 +120,20 @@ class AnthropicProvider(LLMProvider):
 
 class LocalOpenAICompatibleProvider(LLMProvider):
     """Modelo local, em qualquer servidor que fale a API compatível com
-    OpenAI (`/v1/chat/completions`) — llamafile, llama.cpp server, Ollama
-    (também expõe esse endpoint), LM Studio, vLLM, text-generation-webui
-    com a extensão OpenAI, etc. `base_url` e `model` são texto livre e
+    OpenAI (`{base_url}/chat/completions`) — llamafile, llama.cpp server,
+    Ollama (também expõe esse endpoint), LM Studio, vLLM,
+    text-generation-webui com a extensão OpenAI, Groq, DeepInfra, Gemini
+    (via `/v1beta/openai`), etc. `base_url` e `model` são texto livre e
     configuráveis pela Settings Page (SCRUM-59): dá pra apontar pro VPS
-    (serviço `jarvis-llamafile` no docker-compose) ou pra qualquer outra
-    máquina na rede (ex.: o Mac do usuário via Tailscale) sem editar
-    código — só trocar o endereço salvo.
+    (serviço `jarvis-llamafile` no docker-compose), qualquer outra máquina
+    na rede (ex.: o Mac do usuário via Tailscale), ou um provedor hospedado
+    sem editar código — só trocar o endereço salvo.
+
+    `base_url` é o prefixo completo até (mas sem incluir) `/chat/completions`
+    — mesma convenção que a lib oficial da OpenAI usa em `base_url=` (ex.:
+    Groq é `.../openai/v1`, Gemini é `.../v1beta/openai` — cada provedor tem
+    seu próprio sufixo de versão, por isso não dá pra assumir um "/v1" fixo
+    aqui; achado real: Gemini quebrava com esse fixo porque não usa "/v1").
 
     Requer um modelo com suporte a tool-calling; sem suporte, o modelo
     simplesmente nunca devolve `tool_calls` e o loop retorna o texto puro
@@ -134,7 +141,7 @@ class LocalOpenAICompatibleProvider(LLMProvider):
 
     `api_key` (SCRUM-59, 2ª volta) — opcional, vazio quando aponta pro
     llamafile do próprio VPS (sem autenticação). Necessário pra qualquer
-    provedor hospedado que fale essa mesma API (Groq, DeepInfra, Fireworks,
+    provedor hospedado que fale essa mesma API (Groq, DeepInfra, Gemini,
     etc.) — motivo real de existir: o VPS de 2 vCPU não dá conta de rodar
     inferência local em tempo hábil pra voz (achado em produção, ~15
     tokens/s, minutos por resposta), então a alternativa viável de "modelo
@@ -187,7 +194,7 @@ class LocalOpenAICompatibleProvider(LLMProvider):
         async with httpx.AsyncClient(timeout=180.0) as client:
             for _ in range(MAX_TOOL_ITERATIONS):
                 response = await client.post(
-                    f"{self._base_url}/v1/chat/completions",
+                    f"{self._base_url}/chat/completions",
                     headers=headers,
                     json={
                         "model": self._model,

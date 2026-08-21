@@ -133,9 +133,15 @@ class JARVISInterface {
         this.settingsLLMApiKey = document.getElementById('settingsLLMApiKey');
         this.settingsLLMSave = document.getElementById('settingsLLMSave');
         this.settingsLLMStatus = document.getElementById('settingsLLMStatus');
-        // Catálogo curado (SCRUM-59, 2ª volta): nome + pra-que-serve + preço, pra não depender
-        // do usuário digitar o nome exato do modelo à mão (erro real já aconteceu — "qwen3-4b"
-        // em vez de "qwen3-4b-instruct"). Preço é referência de ago/2026, pode desatualizar.
+        // Catálogo curado (SCRUM-59): nome + pra-que-serve + preço, pra não depender do usuário
+        // digitar o nome exato do modelo à mão (erro real já aconteceu — "qwen3-4b" em vez de
+        // "qwen3-4b-instruct"). Preço é referência de ago/2026, pode desatualizar.
+        //
+        // Chaveado por provedor OU por servidor (base_url) — não só por "local" — porque Groq e
+        // Gemini têm listas de modelo completamente diferentes; misturar os dois num catálogo
+        // "local" único ia mostrar modelo da Groq com o servidor Gemini selecionado (e vice
+        // versa). populateLLMModelPreset() recebe a chave certa: 'anthropic' pro provedor
+        // Anthropic, ou o valor do preset de servidor selecionado pro provedor "local".
         this.LLM_MODEL_CATALOG = {
             anthropic: [
                 { value: 'claude-sonnet-5', label: 'Sonnet 5 — equilíbrio custo/qualidade ($2/$10 por milhão de tokens)' },
@@ -146,9 +152,14 @@ class JARVISInterface {
             // com frequência — llama-3.1-8b-instant e llama-3.3-70b-versatile, por exemplo, já
             // saíram do ar entre uma pesquisa e o teste real (model_not_found). Testado de
             // ponta a ponta com sucesso: openai/gpt-oss-20b respondeu em ~3s.
-            local: [
+            'https://api.groq.com/openai/v1': [
                 { value: 'openai/gpt-oss-20b', label: 'Groq — GPT-OSS 20B, rápido e barato (~$0.075/$0.30 por milhão)' },
                 { value: 'openai/gpt-oss-120b', label: 'Groq — GPT-OSS 120B, mais capaz (~$0.15/$0.60 por milhão)' },
+            ],
+            'https://generativelanguage.googleapis.com/v1beta/openai': [
+                { value: 'gemini-2.5-flash-lite', label: 'Gemini — 2.5 Flash-Lite, o mais barato (~$0.10/$0.40 por milhão)' },
+                { value: 'gemini-2.5-flash', label: 'Gemini — 2.5 Flash, equilíbrio custo/qualidade (~$0.30/$2.50 por milhão)' },
+                { value: 'gemini-3.7-flash', label: 'Gemini — 3.7 Flash, mais novo e capaz (~$0.75/$3.75 por milhão)' },
             ],
         };
 
@@ -698,7 +709,7 @@ class JARVISInterface {
         this.syncLLMProviderUI();
         if (this.settingsLLMProvider && this.settingsLLMModel) {
             this.settingsLLMProvider.addEventListener('change', () => {
-                this.populateLLMModelPreset(this.settingsLLMProvider.value);
+                this.populateLLMModelPreset(this.currentModelCatalogKey());
                 // Trocar o provedor sozinho, sem atualizar o campo de modelo, permite salvar
                 // uma combinação inválida (ex.: provedor "local" com o modelo ainda em
                 // "claude-opus-5") — foi exatamente isso que aconteceu em produção e derrubou
@@ -725,6 +736,9 @@ class JARVISInterface {
         }
         // Preset de servidor (SCRUM-59): escolher um endereço conhecido preenche o campo de
         // texto direto; "Personalizado..." libera o campo pra digitar (ex.: Tailscale do Mac).
+        // Cada servidor tem seu próprio catálogo de modelo (Groq ≠ Gemini) — troca de servidor
+        // também repopula o dropdown de modelo, senão ficava mostrando modelo da Groq com
+        // Gemini selecionado (ou vice-versa).
         if (this.settingsLLMBaseUrlPreset && this.settingsLLMBaseUrl) {
             this.settingsLLMBaseUrlPreset.addEventListener('change', () => {
                 const value = this.settingsLLMBaseUrlPreset.value;
@@ -736,15 +750,26 @@ class JARVISInterface {
                     this.settingsLLMBaseUrl.value = '';
                     this.settingsLLMBaseUrl.focus();
                 }
+                this.populateLLMModelPreset(this.currentModelCatalogKey());
+                if (this.settingsLLMModelPreset) this.settingsLLMModelPreset.dispatchEvent(new Event('change'));
             });
         }
     }
 
-    // Preenche o <select> de modelos com o catálogo do provedor escolhido + "Personalizado...".
-    // Chamado ao trocar de provedor e ao carregar a config salva (loadLLMSettings).
-    populateLLMModelPreset(provider) {
+    // Chave do catálogo de modelo pro estado atual do form: 'anthropic' pro provedor Anthropic,
+    // ou o valor do preset de servidor selecionado pro provedor "local" (Groq/Gemini/VPS têm
+    // catálogos próprios — ver LLM_MODEL_CATALOG). Servidor "Personalizado..." ou desconhecido
+    // cai em catálogo vazio (só "Personalizado..." no dropdown de modelo também).
+    currentModelCatalogKey() {
+        if (this.settingsLLMProvider?.value !== 'local') return 'anthropic';
+        return this.settingsLLMBaseUrlPreset?.value || '';
+    }
+
+    // Preenche o <select> de modelos com o catálogo da chave escolhida + "Personalizado...".
+    // Chamado ao trocar de provedor/servidor e ao carregar a config salva (loadLLMSettings).
+    populateLLMModelPreset(catalogKey) {
         if (!this.settingsLLMModelPreset) return;
-        const catalog = this.LLM_MODEL_CATALOG[provider] || [];
+        const catalog = this.LLM_MODEL_CATALOG[catalogKey] || [];
         const options = catalog.map((m) => `<option value="${m.value}">${this.escapeHtml(m.label)}</option>`);
         options.push('<option value="">Personalizado...</option>');
         this.settingsLLMModelPreset.innerHTML = options.join('');
@@ -817,15 +842,9 @@ class JARVISInterface {
             const data = await response.json();
             this.settingsLLMProvider.value = data.llm_provider;
             this.settingsLLMModel.value = data.llm_model;
-            this.populateLLMModelPreset(data.llm_provider);
-            if (this.settingsLLMModelPreset) {
-                // Se o modelo salvo bater com um do catálogo, seleciona ele; senão cai em
-                // "Personalizado..." com o campo de texto já preenchido com o valor real.
-                const matchesModel = Array.from(this.settingsLLMModelPreset.options)
-                    .some((opt) => opt.value && opt.value === data.llm_model);
-                this.settingsLLMModelPreset.value = matchesModel ? data.llm_model : '';
-                if (this.settingsLLMModelCustomRow) this.settingsLLMModelCustomRow.hidden = matchesModel;
-            }
+            // Servidor primeiro — o catálogo de modelo certo (Groq ≠ Gemini) depende de qual
+            // preset de servidor bate com o endereço salvo, então precisa disso antes de
+            // popular/selecionar o dropdown de modelo.
             if (this.settingsLLMBaseUrl) this.settingsLLMBaseUrl.value = data.llm_base_url || '';
             if (this.settingsLLMBaseUrlPreset) {
                 // Se o endereço salvo bater com um preset conhecido, seleciona ele; senão cai
@@ -835,13 +854,22 @@ class JARVISInterface {
                 this.settingsLLMBaseUrlPreset.value = matchesPreset ? data.llm_base_url : '';
                 if (this.settingsLLMBaseUrlCustomRow) this.settingsLLMBaseUrlCustomRow.hidden = matchesPreset;
             }
+            this.populateLLMModelPreset(this.currentModelCatalogKey());
+            if (this.settingsLLMModelPreset) {
+                // Se o modelo salvo bater com um do catálogo, seleciona ele; senão cai em
+                // "Personalizado..." com o campo de texto já preenchido com o valor real.
+                const matchesModel = Array.from(this.settingsLLMModelPreset.options)
+                    .some((opt) => opt.value && opt.value === data.llm_model);
+                this.settingsLLMModelPreset.value = matchesModel ? data.llm_model : '';
+                if (this.settingsLLMModelCustomRow) this.settingsLLMModelCustomRow.hidden = matchesModel;
+            }
             // A chave nunca volta em texto puro (settings_store.get_llm_config_public) — só o
             // booleano. Placeholder avisa se já tem uma salva; campo sempre começa vazio.
             if (this.settingsLLMApiKey) {
                 this.settingsLLMApiKey.value = '';
                 this.settingsLLMApiKey.placeholder = data.llm_api_key_set
                     ? 'já configurada — deixe em branco pra manter'
-                    : 'ex.: chave da Groq (console.groq.com/keys)';
+                    : 'ex.: chave da Groq ou do Gemini (console.groq.com/keys ou aistudio.google.com/apikey)';
             }
             this.syncLLMProviderUI();
         } catch (error) {
