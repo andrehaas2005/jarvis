@@ -122,13 +122,32 @@ class JARVISInterface {
         this.settingsMusicInput = document.getElementById('settingsMusicInput');
         this.settingsMusicAdd = document.getElementById('settingsMusicAdd');
         this.settingsLLMProvider = document.getElementById('settingsLLMProvider');
+        this.settingsLLMModelPreset = document.getElementById('settingsLLMModelPreset');
+        this.settingsLLMModelCustomRow = document.getElementById('settingsLLMModelCustomRow');
         this.settingsLLMModel = document.getElementById('settingsLLMModel');
         this.settingsLLMBaseUrlRow = document.getElementById('settingsLLMBaseUrlRow');
         this.settingsLLMBaseUrlPreset = document.getElementById('settingsLLMBaseUrlPreset');
         this.settingsLLMBaseUrlCustomRow = document.getElementById('settingsLLMBaseUrlCustomRow');
         this.settingsLLMBaseUrl = document.getElementById('settingsLLMBaseUrl');
+        this.settingsLLMApiKeyRow = document.getElementById('settingsLLMApiKeyRow');
+        this.settingsLLMApiKey = document.getElementById('settingsLLMApiKey');
         this.settingsLLMSave = document.getElementById('settingsLLMSave');
         this.settingsLLMStatus = document.getElementById('settingsLLMStatus');
+        // Catálogo curado (SCRUM-59, 2ª volta): nome + pra-que-serve + preço, pra não depender
+        // do usuário digitar o nome exato do modelo à mão (erro real já aconteceu — "qwen3-4b"
+        // em vez de "qwen3-4b-instruct"). Preço é referência de ago/2026, pode desatualizar.
+        this.LLM_MODEL_CATALOG = {
+            anthropic: [
+                { value: 'claude-sonnet-5', label: 'Sonnet 5 — equilíbrio custo/qualidade ($2/$10 por milhão de tokens)' },
+                { value: 'claude-opus-5', label: 'Opus 5 — mais capaz, pra tarefas complexas ($5/$25 por milhão)' },
+                { value: 'claude-haiku-4-5', label: 'Haiku 4.5 — mais rápido e barato ($1/$5 por milhão)' },
+            ],
+            local: [
+                { value: 'llama-3.3-70b-versatile', label: 'Groq — Llama 3.3 70B, rápido e versátil (~$0.59/$0.79 por milhão)' },
+                { value: 'qwen/qwen3-32b', label: 'Groq — Qwen3 32B, bom em tool-calling (~$0.29/$0.59 por milhão)' },
+                { value: 'llama-3.1-8b-instant', label: 'Groq — Llama 3.1 8B, o mais barato e rápido (~$0.05/$0.08 por milhão)' },
+            ],
+        };
 
         this.conversationStartedAt = null;
         this.messageCount = 0;
@@ -676,9 +695,29 @@ class JARVISInterface {
         this.syncLLMProviderUI();
         if (this.settingsLLMProvider && this.settingsLLMModel) {
             this.settingsLLMProvider.addEventListener('change', () => {
-                const defaults = { anthropic: 'claude-opus-5', local: 'qwen3-4b-thinking' };
-                this.settingsLLMModel.value = defaults[this.settingsLLMProvider.value] || '';
+                this.populateLLMModelPreset(this.settingsLLMProvider.value);
+                // Trocar o provedor sozinho, sem atualizar o campo de modelo, permite salvar
+                // uma combinação inválida (ex.: provedor "local" com o modelo ainda em
+                // "claude-opus-5") — foi exatamente isso que aconteceu em produção e derrubou
+                // TODAS as tools (Gmail, Calendar, Contacts) com 500. Selecionar o primeiro
+                // modelo do catálogo do provedor escolhido evita isso.
+                if (this.settingsLLMModelPreset) this.settingsLLMModelPreset.dispatchEvent(new Event('change'));
                 this.syncLLMProviderUI();
+            });
+        }
+        // Preset de modelo (SCRUM-59, 2ª volta): escolher da lista preenche o campo real
+        // (settingsLLMModel) direto; "Personalizado..." libera o campo de texto.
+        if (this.settingsLLMModelPreset && this.settingsLLMModel) {
+            this.settingsLLMModelPreset.addEventListener('change', () => {
+                const value = this.settingsLLMModelPreset.value;
+                if (value) {
+                    this.settingsLLMModel.value = value;
+                    if (this.settingsLLMModelCustomRow) this.settingsLLMModelCustomRow.hidden = true;
+                } else {
+                    if (this.settingsLLMModelCustomRow) this.settingsLLMModelCustomRow.hidden = false;
+                    this.settingsLLMModel.value = '';
+                    this.settingsLLMModel.focus();
+                }
             });
         }
         // Preset de servidor (SCRUM-59): escolher um endereço conhecido preenche o campo de
@@ -698,11 +737,22 @@ class JARVISInterface {
         }
     }
 
-    // Mostra/esconde a linha de "Servidor" e o aviso de risco conforme o provedor escolhido —
-    // chamado tanto ao trocar o select quanto ao carregar o valor salvo (loadLLMSettings).
+    // Preenche o <select> de modelos com o catálogo do provedor escolhido + "Personalizado...".
+    // Chamado ao trocar de provedor e ao carregar a config salva (loadLLMSettings).
+    populateLLMModelPreset(provider) {
+        if (!this.settingsLLMModelPreset) return;
+        const catalog = this.LLM_MODEL_CATALOG[provider] || [];
+        const options = catalog.map((m) => `<option value="${m.value}">${this.escapeHtml(m.label)}</option>`);
+        options.push('<option value="">Personalizado...</option>');
+        this.settingsLLMModelPreset.innerHTML = options.join('');
+    }
+
+    // Mostra/esconde a linha de "Servidor"/"Chave de API" e o aviso de risco conforme o
+    // provedor escolhido — chamado tanto ao trocar o select quanto ao carregar o valor salvo.
     syncLLMProviderUI() {
         const isLocal = this.settingsLLMProvider?.value === 'local';
         if (this.settingsLLMBaseUrlRow) this.settingsLLMBaseUrlRow.hidden = !isLocal;
+        if (this.settingsLLMApiKeyRow) this.settingsLLMApiKeyRow.hidden = !isLocal;
         const warning = document.getElementById('settingsLLMLocalWarning');
         if (warning) warning.hidden = !isLocal;
     }
@@ -745,8 +795,10 @@ class JARVISInterface {
 
         this.settingsLLMProvider.disabled = !isAdmin;
         this.settingsLLMModel.disabled = !isAdmin;
+        if (this.settingsLLMModelPreset) this.settingsLLMModelPreset.disabled = !isAdmin;
         if (this.settingsLLMBaseUrlPreset) this.settingsLLMBaseUrlPreset.disabled = !isAdmin;
         if (this.settingsLLMBaseUrl) this.settingsLLMBaseUrl.disabled = !isAdmin;
+        if (this.settingsLLMApiKey) this.settingsLLMApiKey.disabled = !isAdmin;
         if (this.settingsLLMSave) this.settingsLLMSave.disabled = !isAdmin;
         const hint = document.getElementById('settingsLLMHint');
         if (hint && !isAdmin) {
@@ -762,6 +814,15 @@ class JARVISInterface {
             const data = await response.json();
             this.settingsLLMProvider.value = data.llm_provider;
             this.settingsLLMModel.value = data.llm_model;
+            this.populateLLMModelPreset(data.llm_provider);
+            if (this.settingsLLMModelPreset) {
+                // Se o modelo salvo bater com um do catálogo, seleciona ele; senão cai em
+                // "Personalizado..." com o campo de texto já preenchido com o valor real.
+                const matchesModel = Array.from(this.settingsLLMModelPreset.options)
+                    .some((opt) => opt.value && opt.value === data.llm_model);
+                this.settingsLLMModelPreset.value = matchesModel ? data.llm_model : '';
+                if (this.settingsLLMModelCustomRow) this.settingsLLMModelCustomRow.hidden = matchesModel;
+            }
             if (this.settingsLLMBaseUrl) this.settingsLLMBaseUrl.value = data.llm_base_url || '';
             if (this.settingsLLMBaseUrlPreset) {
                 // Se o endereço salvo bater com um preset conhecido, seleciona ele; senão cai
@@ -770,6 +831,14 @@ class JARVISInterface {
                     .some((opt) => opt.value && opt.value === data.llm_base_url);
                 this.settingsLLMBaseUrlPreset.value = matchesPreset ? data.llm_base_url : '';
                 if (this.settingsLLMBaseUrlCustomRow) this.settingsLLMBaseUrlCustomRow.hidden = matchesPreset;
+            }
+            // A chave nunca volta em texto puro (settings_store.get_llm_config_public) — só o
+            // booleano. Placeholder avisa se já tem uma salva; campo sempre começa vazio.
+            if (this.settingsLLMApiKey) {
+                this.settingsLLMApiKey.value = '';
+                this.settingsLLMApiKey.placeholder = data.llm_api_key_set
+                    ? 'já configurada — deixe em branco pra manter'
+                    : 'ex.: chave da Groq (console.groq.com/keys)';
             }
             this.syncLLMProviderUI();
         } catch (error) {
@@ -804,11 +873,14 @@ class JARVISInterface {
             this.settingsLLMStatus.textContent = 'Salvando...';
             this.settingsLLMStatus.classList.remove('error');
         }
+        // Vazio = "não mudar a chave já salva" (settings_store.set_llm_config) — só manda um
+        // valor de verdade quando o usuário digitou uma chave nova no campo.
+        const apiKey = provider === 'local' ? (this.settingsLLMApiKey?.value.trim() || '') : '';
         try {
             const response = await fetch(`${JARVIS_BACKEND_URL}/settings/llm`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ provider, model, base_url: baseUrl }),
+                body: JSON.stringify({ provider, model, base_url: baseUrl, api_key: apiKey }),
             });
             if (!response.ok) {
                 const data = await response.json().catch(() => ({}));
@@ -816,6 +888,12 @@ class JARVISInterface {
             }
             if (this.settingsLLMStatus) this.settingsLLMStatus.textContent = 'Salvo ✓';
             this.pushLog(`[CONFIG] Modelo de IA trocado para ${provider}/${model}`);
+            // Limpa o campo depois de salvar — a chave já foi enviada, não precisa continuar
+            // visível na tela (mesmo padrão de qualquer campo de senha).
+            if (this.settingsLLMApiKey && apiKey) {
+                this.settingsLLMApiKey.value = '';
+                this.settingsLLMApiKey.placeholder = 'já configurada — deixe em branco pra manter';
+            }
             // Reflete na hora no painel de créditos (SCRUM-58) — sem esperar o polling de 5min,
             // pra confirmar visualmente que a troca pegou de verdade.
             this.loadStatusCredits();

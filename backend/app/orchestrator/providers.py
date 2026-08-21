@@ -116,11 +116,21 @@ class LocalOpenAICompatibleProvider(LLMProvider):
 
     Requer um modelo com suporte a tool-calling; sem suporte, o modelo
     simplesmente nunca devolve `tool_calls` e o loop retorna o texto puro
-    na primeira resposta."""
+    na primeira resposta.
 
-    def __init__(self, base_url: str, model: str) -> None:
+    `api_key` (SCRUM-59, 2ª volta) — opcional, vazio quando aponta pro
+    llamafile do próprio VPS (sem autenticação). Necessário pra qualquer
+    provedor hospedado que fale essa mesma API (Groq, DeepInfra, Fireworks,
+    etc.) — motivo real de existir: o VPS de 2 vCPU não dá conta de rodar
+    inferência local em tempo hábil pra voz (achado em produção, ~15
+    tokens/s, minutos por resposta), então a alternativa viável de "modelo
+    livremente escolhível" é apontar pra um provedor hospedado rápido e
+    barato em vez de hardware próprio."""
+
+    def __init__(self, base_url: str, model: str, api_key: str = "") -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
+        self._api_key = api_key
 
     @staticmethod
     def _to_openai_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -159,10 +169,12 @@ class LocalOpenAICompatibleProvider(LLMProvider):
         # Timeout generoso de propósito: inferência CPU local de um modelo de
         # alguns bilhões de parâmetros pode levar dezenas de segundos por
         # resposta — bem mais lento que uma API na nuvem.
+        headers = {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
         async with httpx.AsyncClient(timeout=180.0) as client:
             for _ in range(MAX_TOOL_ITERATIONS):
                 response = await client.post(
                     f"{self._base_url}/v1/chat/completions",
+                    headers=headers,
                     json={
                         "model": self._model,
                         "messages": chat_messages,
@@ -211,13 +223,20 @@ class LocalOpenAICompatibleProvider(LLMProvider):
         )
 
 
-def get_provider(provider_name: str, *, api_key: str, model: str, base_url: str = "") -> LLMProvider:
+def get_provider(
+    provider_name: str, *, api_key: str, model: str, base_url: str = "", local_api_key: str = ""
+) -> LLMProvider:
     """Fábrica: provedor efetivo (ver `app/settings_store.py` — configurável
-    em runtime pela Settings Page, sem precisar editar `.env`/reiniciar)."""
+    em runtime pela Settings Page, sem precisar editar `.env`/reiniciar).
+
+    `api_key` é sempre a chave da Anthropic (`.env`); `local_api_key` é a
+    chave opcional do provedor `local` (Groq/DeepInfra/etc. — vazia quando
+    aponta pro llamafile do próprio VPS, sem autenticação) — dois segredos
+    diferentes, nunca confundir um com o outro."""
     if provider_name == "anthropic":
         return AnthropicProvider(api_key=api_key, model=model)
     if provider_name == "local":
         if not base_url:
             raise ValueError("Provedor 'local' precisa de um endereço de servidor configurado (base_url).")
-        return LocalOpenAICompatibleProvider(base_url=base_url, model=model)
+        return LocalOpenAICompatibleProvider(base_url=base_url, model=model, api_key=local_api_key)
     raise ValueError(f"LLM_PROVIDER '{provider_name}' não suportado (aceita 'anthropic' ou 'local').")

@@ -121,17 +121,26 @@
                                 <option value="local">Local (llamafile/Ollama/etc.)</option>
                             </select>
                         </div>
+                        <!-- Modelo: <select> com as opções conhecidas de cada provedor (nome +
+                             preço/pra-que-serve, achado real do SCRUM-59 — digitar o nome errado à
+                             mão trocou "qwen3-4b-instruct" por "qwen3-4b" sem querer). "Personalizado"
+                             libera o campo de texto pra qualquer modelo novo que a gente não listou. -->
                         <div class="settings-llm-row">
                             <label class="settings-label">Modelo</label>
-                            <input type="text" id="settingsLLMModel" class="settings-input" placeholder="ex.: claude-opus-5, qwen3-4b-thinking...">
+                            <select id="settingsLLMModelPreset" class="settings-input"></select>
+                        </div>
+                        <div class="settings-llm-row" id="settingsLLMModelCustomRow" hidden>
+                            <label class="settings-label"></label>
+                            <input type="text" id="settingsLLMModel" class="settings-input" placeholder="nome exato do modelo">
                         </div>
                         <!-- Só aparece com provedor "local" — endereço de QUALQUER servidor compatível
-                             com OpenAI (VPS, Mac via Tailscale, outra máquina...). Presets é atalho
-                             pros endereços já conhecidos; "Personalizado" libera o campo de texto. -->
+                             com OpenAI (VPS, Mac via Tailscale, Groq/DeepInfra na nuvem...). Presets é
+                             atalho pros endereços já conhecidos; "Personalizado" libera o campo de texto. -->
                         <div class="settings-llm-row" id="settingsLLMBaseUrlRow" hidden>
                             <label class="settings-label">Servidor</label>
                             <select id="settingsLLMBaseUrlPreset" class="settings-input">
-                                <option value="http://jarvis-llamafile:8080">VPS (interno, sempre ligado)</option>
+                                <option value="https://api.groq.com/openai/v1">Groq (nuvem, rápido e barato)</option>
+                                <option value="http://jarvis-llamafile:8080">VPS (interno — lento, 2 vCPU, não recomendado)</option>
                                 <option value="">Personalizado...</option>
                             </select>
                         </div>
@@ -139,20 +148,28 @@
                             <label class="settings-label"></label>
                             <input type="text" id="settingsLLMBaseUrl" class="settings-input" placeholder="ex.: http://100.x.x.x:8080 (endereço Tailscale do seu Mac)">
                         </div>
+                        <!-- Chave de API — só quando o servidor exige autenticação (Groq/DeepInfra
+                             exigem; o llamafile do VPS não). Nunca volta em texto puro do backend
+                             (GET só informa se já está configurada) — placeholder avisa disso. -->
+                        <div class="settings-llm-row" id="settingsLLMApiKeyRow" hidden>
+                            <label class="settings-label">Chave de API</label>
+                            <input type="password" id="settingsLLMApiKey" class="settings-input" placeholder="deixe em branco pra manter a já salva">
+                        </div>
                         <div class="settings-llm-row">
                             <button class="settings-btn" id="settingsLLMSave">SALVAR</button>
                             <span class="settings-llm-status" id="settingsLLMStatus"></span>
                         </div>
-                        <!-- Aviso achado no SCRUM-58: escolher um provedor local sem um servidor
+                        <!-- Aviso achado no SCRUM-58/59: escolher um provedor local sem um servidor
                              de verdade rodando e acessível derruba TODAS as tools (Gmail/Calendar/
                              Contacts também), não só o modelo — o orquestrador inteiro passa a
-                             depender dessa conexão. -->
+                             depender dessa conexão. O VPS (2 vCPU) também se provou tempo demais
+                             pra voz na prática (minutos por resposta) — Groq é a alternativa rápida. -->
                         <p class="settings-section-hint" id="settingsLLMLocalWarning" hidden>
-                            ⚠️ Um modelo local só funciona se o servidor escolhido estiver ligado e
-                            acessível pelo backend nesse exato momento — sem isso, TODAS as
+                            ⚠️ Um modelo local/hospedado só funciona se o servidor escolhido estiver
+                            ligado e acessível pelo backend nesse exato momento — sem isso, TODAS as
                             ferramentas (email, agenda, contatos) param de funcionar, não só o
-                            modelo. Também costuma ser bem mais lento que a nuvem (vários segundos
-                            por resposta).
+                            modelo. O VPS interno é lento demais pra voz na prática (minutos por
+                            resposta, 2 vCPU) — prefira Groq.
                         </p>
                     </section>
                 </div>
