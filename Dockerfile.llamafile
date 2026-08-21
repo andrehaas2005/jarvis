@@ -34,4 +34,13 @@ EXPOSE 8080
 #   na mesma rede docker — sem porta publicada pro host, só é alcançável de dentro da rede
 #   interna do compose (ver docker-compose.yml no servidor).
 # -ngl 0: força CPU-only (sem GPU no VPS)
-CMD ["./llamafile", "-m", "model.gguf", "--server", "--host", "0.0.0.0", "--port", "8080", "-ngl", "0"]
+#
+# CMD em forma shell (não array/exec): o binário llamafile é um "polyglot" (Cosmopolitan
+# APE — ao mesmo tempo MZ/PE, ELF e shell script). Quando roda direto via execve() (forma
+# array), o kernel devolve ENOEXEC ("exec format error") porque não reconhece o formato
+# sem o registro binfmt_misc (mascarado dentro de container Docker por padrão). Rodando via
+# /bin/sh (forma shell), o cabeçalho polyglot do arquivo é interpretado como script, que
+# então localiza e executa o stub nativo certo por dentro — funciona sem precisar de
+# binfmt_misc nem modo --privileged. Confirmado: falhava com "exec format error" em loop de
+# restart usando a forma array; resolvido trocando pra forma shell.
+CMD ["sh", "-c", "./llamafile -m model.gguf --server --host 0.0.0.0 --port 8080 -ngl 0"]
