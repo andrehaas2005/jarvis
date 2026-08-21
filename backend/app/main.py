@@ -136,12 +136,14 @@ def _require_user(authorization: str | None) -> User:
 class LLMSettingsRequest(BaseModel):
     provider: str
     model: str
+    base_url: str = ""
 
 
 @app.get("/settings/llm")
 async def settings_llm_get(authorization: str | None = Header(default=None)) -> dict:
-    """Provedor/modelo de IA em uso agora (Settings Page, SCRUM-23). Qualquer
-    usuário logado pode ver — só admin pode trocar (ver PUT abaixo)."""
+    """Provedor/modelo/endereço de IA em uso agora (Settings Page,
+    SCRUM-23/59). Qualquer usuário logado pode ver — só admin pode trocar
+    (ver PUT abaixo)."""
     _require_user(authorization)
     return get_llm_config()
 
@@ -150,16 +152,17 @@ async def settings_llm_get(authorization: str | None = Header(default=None)) -> 
 async def settings_llm_put(
     body: LLMSettingsRequest, authorization: str | None = Header(default=None)
 ) -> dict:
-    """Troca o provedor/modelo do orquestrador em runtime, sem restart —
-    afeta todas as conversas (não é por usuário, ver settings_store.py).
-    `provider`/`model` aceitam qualquer valor: não travamos numa lista fixa
-    porque modelos novos (Ollama local, Anthropic futuro) não devem exigir
-    alterar código pra ficarem selecionáveis."""
+    """Troca o provedor/modelo/endereço do orquestrador em runtime, sem
+    restart — afeta todas as conversas (não é por usuário, ver
+    settings_store.py). `provider`/`model`/`base_url` aceitam qualquer
+    valor: não travamos numa lista fixa porque servidores novos (VPS, Mac
+    do usuário via Tailscale, Anthropic futuro) não devem exigir alterar
+    código pra ficarem selecionáveis."""
     user = _require_user(authorization)
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Só admin pode trocar o modelo de IA")
     try:
-        return set_llm_config(provider=body.provider, model=body.model)
+        return set_llm_config(provider=body.provider, model=body.model, base_url=body.base_url)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

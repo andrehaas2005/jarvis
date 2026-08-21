@@ -470,6 +470,12 @@ select.settings-input {
     margin-bottom: 0;
 }
 
+/* Achado real (SCRUM-59): a classe acima (com display:flex) sobrepunha o atributo [hidden]
+   nativo do navegador — a linha de "Servidor" continuava visível mesmo com hidden=true. */
+.settings-llm-row[hidden] {
+    display: none;
+}
+
 .settings-label {
     flex-shrink: 0;
     width: 70px;

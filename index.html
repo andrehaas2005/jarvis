@@ -110,7 +110,7 @@
                         </div>
                     </section>
 
-                    <!-- Modelo de IA (SCRUM-23) -->
+                    <!-- Modelo de IA (SCRUM-23/59) -->
                     <section class="settings-section">
                         <h3 class="settings-section-title">MODELO DE IA</h3>
                         <p class="settings-section-hint" id="settingsLLMHint">Modelo que responde no orquestrador (afeta e-mail/agenda/contatos — a voz em si é sempre ElevenLabs).</p>
@@ -118,24 +118,41 @@
                             <label class="settings-label">Provedor</label>
                             <select id="settingsLLMProvider" class="settings-input">
                                 <option value="anthropic">Anthropic (nuvem)</option>
-                                <option value="ollama">Ollama (local)</option>
+                                <option value="local">Local (llamafile/Ollama/etc.)</option>
                             </select>
                         </div>
                         <div class="settings-llm-row">
                             <label class="settings-label">Modelo</label>
-                            <input type="text" id="settingsLLMModel" class="settings-input" placeholder="ex.: claude-opus-5, qwen3:4b, llama3.1...">
+                            <input type="text" id="settingsLLMModel" class="settings-input" placeholder="ex.: claude-opus-5, qwen3-4b-thinking...">
+                        </div>
+                        <!-- Só aparece com provedor "local" — endereço de QUALQUER servidor compatível
+                             com OpenAI (VPS, Mac via Tailscale, outra máquina...). Presets é atalho
+                             pros endereços já conhecidos; "Personalizado" libera o campo de texto. -->
+                        <div class="settings-llm-row" id="settingsLLMBaseUrlRow" hidden>
+                            <label class="settings-label">Servidor</label>
+                            <select id="settingsLLMBaseUrlPreset" class="settings-input">
+                                <option value="http://jarvis-llamafile:8080">VPS (interno, sempre ligado)</option>
+                                <option value="">Personalizado...</option>
+                            </select>
+                        </div>
+                        <div class="settings-llm-row" id="settingsLLMBaseUrlCustomRow" hidden>
+                            <label class="settings-label"></label>
+                            <input type="text" id="settingsLLMBaseUrl" class="settings-input" placeholder="ex.: http://100.x.x.x:8080 (endereço Tailscale do seu Mac)">
                         </div>
                         <div class="settings-llm-row">
                             <button class="settings-btn" id="settingsLLMSave">SALVAR</button>
                             <span class="settings-llm-status" id="settingsLLMStatus"></span>
                         </div>
-                        <!-- Aviso achado no SCRUM-58: escolher Ollama sem um servidor de verdade
-                             rodando derruba TODAS as tools (Gmail/Calendar/Contacts também), não
-                             só o clima — o orquestrador inteiro passa a depender dessa conexão. -->
-                        <p class="settings-section-hint" id="settingsLLMOllamaWarning" hidden>
-                            ⚠️ Ollama precisa de um servidor rodando e acessível pelo backend (hoje
-                            não instalado no servidor de produção) — sem isso, TODAS as ferramentas
-                            (email, agenda, contatos) param de funcionar, não só o modelo.
+                        <!-- Aviso achado no SCRUM-58: escolher um provedor local sem um servidor
+                             de verdade rodando e acessível derruba TODAS as tools (Gmail/Calendar/
+                             Contacts também), não só o modelo — o orquestrador inteiro passa a
+                             depender dessa conexão. -->
+                        <p class="settings-section-hint" id="settingsLLMLocalWarning" hidden>
+                            ⚠️ Um modelo local só funciona se o servidor escolhido estiver ligado e
+                            acessível pelo backend nesse exato momento — sem isso, TODAS as
+                            ferramentas (email, agenda, contatos) param de funcionar, não só o
+                            modelo. Também costuma ser bem mais lento que a nuvem (vários segundos
+                            por resposta).
                         </p>
                     </section>
                 </div>
