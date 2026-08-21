@@ -210,6 +210,13 @@ Modal acessível pelo botão ⚙ na topbar ou por voz ("Jarvis, abrir configura�
 
 Testado local e em produção (`GET /settings/llm` retornando o default correto, modal renderizando com dado real do backend).
 
+### ✅ SCRUM-24/25 — Memória de conversa
+- **SCRUM-24 (Nível 1, RAM):** já existia desde o SCRUM-17 (`memory.py`, `SessionMemory` por `conversation_id`) — confirmado, sem mudança necessária.
+- **SCRUM-25 (Nível 2, 24h em SQLite):** `backend/app/orchestrator/history_store.py` (novo) — tabela `conversation_history` no mesmo `jarvis.db`, grava cada turno depois de respondido, injeta resumo das últimas 24h no system prompt (`router.py`). Sobrevive a `conversation_id` novo (cada ligação de voz do ElevenLabs gera um) e a restart do backend — o Jarvis lembra do que foi falado mais cedo no mesmo dia mesmo numa ligação totalmente nova.
+- **Bug achado testando em produção:** timestamp injetado só tinha hora (sem data) — o modelo respondia certo mas inventava "você me falou ontem à tarde" pra um turno de segundos atrás. Fix: timestamp com data (`dd/mm HH:MM`) + instrução explícita no prompt pra usar a data real.
+
+Testado local (sessão A grava fato → sessão B, `conversation_id` diferente, pergunta sobre ele → resposta correta) e em produção pelo webhook real.
+
 ---
 
 ## 📊 Próximas Ações (Ordem de Prioridade)
@@ -220,7 +227,7 @@ Testado local e em produção (`GET /settings/llm` retornando o default correto,
 
 ### CURTO PRAZO (Fim Sprint 1)
 5. ~~**SCRUM-20-23** — Settings Page~~ — **feito** (sessão 4): frases de ativação, playlist de música, modelo de IA — ver seção acima. (A página de gestão de usuários — criar/editar outras contas do login — não tinha ticket próprio ainda; continua pendente, é diferente desta Settings Page.)
-6. **SCRUM-24-25** — Sistema de Memória (Nível 1-2) — retomar por aqui
+6. ~~**SCRUM-24-25** — Sistema de Memória (Nível 1-2)~~ — **feito** (sessão 4): ver seção acima
 
 ---
 
