@@ -19,3 +19,8 @@ backend/data/
 # mudar a trilha (ou use o botão "MÚSICA" no HUD pra desligar).
 assets/music/
 backend/.credentials/
+
+# Modelo local (SCRUM-59) — llamafile + .gguf, alguns GB, nunca vão pro git. O Dockerfile do
+# serviço jarvis-llamafile baixa esses arquivos direto na hora do build (mesma fonte: llamafile
+# do GitHub releases, modelo do Hugging Face unsloth/Qwen3-4B-Thinking-2507-GGUF).
+assets/model/

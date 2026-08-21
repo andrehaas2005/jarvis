@@ -64,14 +64,15 @@ async def handle_query(query: str, session_id: str) -> str:
             "ANTHROPIC_API_KEY não configurada no .env (veja backend/.env.example)."
         )
 
-    # Provedor/modelo efetivos vêm do settings_store (editável pela Settings
-    # Page, SCRUM-23) — cai pro default do .env quando nunca foi trocado.
+    # Provedor/modelo/endereço efetivos vêm do settings_store (editável pela
+    # Settings Page, SCRUM-23/59) — cai pro default do .env quando nunca foi
+    # trocado.
     llm_config = get_llm_config()
     provider = get_provider(
         llm_config["llm_provider"],
         api_key=settings.anthropic_api_key,
         model=llm_config["llm_model"],
-        ollama_base_url=settings.ollama_base_url,
+        base_url=llm_config["llm_base_url"],
     )
 
     memory = get_session_memory()

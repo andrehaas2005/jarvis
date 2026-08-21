@@ -123,6 +123,10 @@ class JARVISInterface {
         this.settingsMusicAdd = document.getElementById('settingsMusicAdd');
         this.settingsLLMProvider = document.getElementById('settingsLLMProvider');
         this.settingsLLMModel = document.getElementById('settingsLLMModel');
+        this.settingsLLMBaseUrlRow = document.getElementById('settingsLLMBaseUrlRow');
+        this.settingsLLMBaseUrlPreset = document.getElementById('settingsLLMBaseUrlPreset');
+        this.settingsLLMBaseUrlCustomRow = document.getElementById('settingsLLMBaseUrlCustomRow');
+        this.settingsLLMBaseUrl = document.getElementById('settingsLLMBaseUrl');
         this.settingsLLMSave = document.getElementById('settingsLLMSave');
         this.settingsLLMStatus = document.getElementById('settingsLLMStatus');
 
@@ -664,19 +668,43 @@ class JARVISInterface {
 
         // Seção 3: modelo de IA — só carrega quando o modal abre (evita chamada à toa).
         // Trocar o provedor sozinho, sem atualizar o campo de modelo, permite salvar uma
-        // combinação inválida (ex.: provedor "ollama" com o campo ainda em "claude-opus-5")
+        // combinação inválida (ex.: provedor "local" com o campo ainda em "claude-opus-5")
         // — foi exatamente isso que aconteceu em produção e derrubou TODAS as tools (Gmail,
-        // Calendar, Contacts) com 500, porque o Ollama não existe no servidor. Preenche um
+        // Calendar, Contacts) com 500, porque não havia servidor local nenhum. Preenche um
         // modelo padrão sensato pro provedor escolhido sempre que o select mudar — o campo
         // continua editável livremente, só evita salvar por engano com o valor errado.
+        this.syncLLMProviderUI();
         if (this.settingsLLMProvider && this.settingsLLMModel) {
-            const ollamaWarning = document.getElementById('settingsLLMOllamaWarning');
             this.settingsLLMProvider.addEventListener('change', () => {
-                const defaults = { anthropic: 'claude-opus-5', ollama: 'llama3.1' };
+                const defaults = { anthropic: 'claude-opus-5', local: 'qwen3-4b-thinking' };
                 this.settingsLLMModel.value = defaults[this.settingsLLMProvider.value] || '';
-                if (ollamaWarning) ollamaWarning.hidden = this.settingsLLMProvider.value !== 'ollama';
+                this.syncLLMProviderUI();
             });
         }
+        // Preset de servidor (SCRUM-59): escolher um endereço conhecido preenche o campo de
+        // texto direto; "Personalizado..." libera o campo pra digitar (ex.: Tailscale do Mac).
+        if (this.settingsLLMBaseUrlPreset && this.settingsLLMBaseUrl) {
+            this.settingsLLMBaseUrlPreset.addEventListener('change', () => {
+                const value = this.settingsLLMBaseUrlPreset.value;
+                if (value) {
+                    this.settingsLLMBaseUrl.value = value;
+                    this.settingsLLMBaseUrlCustomRow.hidden = true;
+                } else {
+                    this.settingsLLMBaseUrlCustomRow.hidden = false;
+                    this.settingsLLMBaseUrl.value = '';
+                    this.settingsLLMBaseUrl.focus();
+                }
+            });
+        }
+    }
+
+    // Mostra/esconde a linha de "Servidor" e o aviso de risco conforme o provedor escolhido —
+    // chamado tanto ao trocar o select quanto ao carregar o valor salvo (loadLLMSettings).
+    syncLLMProviderUI() {
+        const isLocal = this.settingsLLMProvider?.value === 'local';
+        if (this.settingsLLMBaseUrlRow) this.settingsLLMBaseUrlRow.hidden = !isLocal;
+        const warning = document.getElementById('settingsLLMLocalWarning');
+        if (warning) warning.hidden = !isLocal;
     }
 
     renderSettingsPhrases() {
@@ -717,6 +745,8 @@ class JARVISInterface {
 
         this.settingsLLMProvider.disabled = !isAdmin;
         this.settingsLLMModel.disabled = !isAdmin;
+        if (this.settingsLLMBaseUrlPreset) this.settingsLLMBaseUrlPreset.disabled = !isAdmin;
+        if (this.settingsLLMBaseUrl) this.settingsLLMBaseUrl.disabled = !isAdmin;
         if (this.settingsLLMSave) this.settingsLLMSave.disabled = !isAdmin;
         const hint = document.getElementById('settingsLLMHint');
         if (hint && !isAdmin) {
@@ -732,8 +762,16 @@ class JARVISInterface {
             const data = await response.json();
             this.settingsLLMProvider.value = data.llm_provider;
             this.settingsLLMModel.value = data.llm_model;
-            const ollamaWarning = document.getElementById('settingsLLMOllamaWarning');
-            if (ollamaWarning) ollamaWarning.hidden = data.llm_provider !== 'ollama';
+            if (this.settingsLLMBaseUrl) this.settingsLLMBaseUrl.value = data.llm_base_url || '';
+            if (this.settingsLLMBaseUrlPreset) {
+                // Se o endereço salvo bater com um preset conhecido, seleciona ele; senão cai
+                // em "Personalizado..." com o campo de texto já preenchido.
+                const matchesPreset = Array.from(this.settingsLLMBaseUrlPreset.options)
+                    .some((opt) => opt.value && opt.value === data.llm_base_url);
+                this.settingsLLMBaseUrlPreset.value = matchesPreset ? data.llm_base_url : '';
+                if (this.settingsLLMBaseUrlCustomRow) this.settingsLLMBaseUrlCustomRow.hidden = matchesPreset;
+            }
+            this.syncLLMProviderUI();
         } catch (error) {
             console.warn('Não deu pra carregar o modelo de IA atual:', error.message);
             if (this.settingsLLMStatus) {
@@ -751,7 +789,15 @@ class JARVISInterface {
         const token = localStorage.getItem('jarvis-auth-token');
         const provider = this.settingsLLMProvider.value;
         const model = this.settingsLLMModel.value.trim();
+        const baseUrl = provider === 'local' ? (this.settingsLLMBaseUrl?.value.trim() || '') : '';
         if (!model) return;
+        if (provider === 'local' && !baseUrl) {
+            if (this.settingsLLMStatus) {
+                this.settingsLLMStatus.textContent = 'Informe o endereço do servidor';
+                this.settingsLLMStatus.classList.add('error');
+            }
+            return;
+        }
 
         this.settingsLLMSave.disabled = true;
         if (this.settingsLLMStatus) {
@@ -762,7 +808,7 @@ class JARVISInterface {
             const response = await fetch(`${JARVIS_BACKEND_URL}/settings/llm`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ provider, model }),
+                body: JSON.stringify({ provider, model, base_url: baseUrl }),
             });
             if (!response.ok) {
                 const data = await response.json().catch(() => ({}));
