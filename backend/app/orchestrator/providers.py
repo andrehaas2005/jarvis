@@ -168,6 +168,15 @@ class LocalOpenAICompatibleProvider(LLMProvider):
                         "messages": chat_messages,
                         "tools": openai_tools,
                         "stream": False,
+                        # Sem isso, um modelo local quantizado que não emite um
+                        # token de parada limpo (comum sob CPU) gera até bater o
+                        # teto do contexto (2048+ tokens) — minutos travado,
+                        # parecendo "pensando" sem nunca responder. Achado real
+                        # em produção (SCRUM-59): duas tasks canceladas em
+                        # n_tokens=2048 nos logs do llamafile. 512 é generoso pra
+                        # uma resposta de voz — bem mais que qualquer resposta
+                        # útil precisa.
+                        "max_tokens": 512,
                     },
                 )
                 response.raise_for_status()
