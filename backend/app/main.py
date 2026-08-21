@@ -12,12 +12,13 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.auth import authenticate, init_db, issue_token, verify_token
+from app.auth import User, authenticate, init_db, issue_token, verify_token
 from app.config import get_settings
 from app.elevenlabs import get_signed_conversation_url
 from app.logging_config import get_logger, setup_logging
 from app.orchestrator.router import handle_query
 from app.presence import get_active_count, heartbeat
+from app.settings_store import get_llm_config, set_llm_config
 from app.status import get_checkin, get_credits
 
 settings = get_settings()
@@ -120,6 +121,45 @@ async def auth_me(authorization: str | None = Header(default=None)) -> dict:
         "jarvis_address": user.jarvis_address,
         "role": user.role,
     }
+
+
+def _require_user(authorization: str | None) -> User:
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    user = verify_token(token) if token else None
+    if user is None:
+        raise HTTPException(status_code=401, detail="Token inválido ou expirado")
+    return user
+
+
+class LLMSettingsRequest(BaseModel):
+    provider: str
+    model: str
+
+
+@app.get("/settings/llm")
+async def settings_llm_get(authorization: str | None = Header(default=None)) -> dict:
+    """Provedor/modelo de IA em uso agora (Settings Page, SCRUM-23). Qualquer
+    usuário logado pode ver — só admin pode trocar (ver PUT abaixo)."""
+    _require_user(authorization)
+    return get_llm_config()
+
+
+@app.put("/settings/llm")
+async def settings_llm_put(
+    body: LLMSettingsRequest, authorization: str | None = Header(default=None)
+) -> dict:
+    """Troca o provedor/modelo do orquestrador em runtime, sem restart —
+    afeta todas as conversas (não é por usuário, ver settings_store.py).
+    `provider`/`model` aceitam qualquer valor: não travamos numa lista fixa
+    porque modelos novos (Ollama local, Anthropic futuro) não devem exigir
+    alterar código pra ficarem selecionáveis."""
+    user = _require_user(authorization)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Só admin pode trocar o modelo de IA")
+    try:
+        return set_llm_config(provider=body.provider, model=body.model)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/status/checkin")

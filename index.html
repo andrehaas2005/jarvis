@@ -70,6 +70,67 @@
                 <button class="topbar-sleep" id="topbarSleep" title="Encerrar conversa">
                     <span class="topbar-sleep-icon">&#9211;</span> SLEEP
                 </button>
+                <button class="topbar-settings" id="topbarSettings" title="Configurações (ou diga 'Jarvis, abrir configurações')">
+                    &#9881;
+                </button>
+            </div>
+        </div>
+
+        <!-- Settings Page (SCRUM-20/21/22/23) — modal acessível pelo botão ⚙ na topbar ou por voz
+             ("Jarvis, abrir configurações"). Três seções independentes, cada uma lida/gravada por
+             seu próprio pedaço de setupSettingsModal() em script.js. -->
+        <div class="settings-overlay" id="settingsOverlay" hidden>
+            <div class="settings-modal">
+                <div class="settings-modal-header">
+                    <span class="settings-modal-title">&#9881; CONFIGURAÇÕES</span>
+                    <button class="settings-modal-close" id="settingsClose" title="Fechar">&times;</button>
+                </div>
+
+                <div class="settings-modal-body">
+                    <!-- Frases de ativação (SCRUM-21) -->
+                    <section class="settings-section">
+                        <h3 class="settings-section-title">FRASES DE ATIVAÇÃO</h3>
+                        <p class="settings-section-hint">Diga qualquer uma delas (com o microfone liberado, fora de uma conversa) para o Jarvis começar a te ouvir sozinho.</p>
+                        <ul class="settings-phrase-list" id="settingsPhraseList"></ul>
+                        <div class="settings-phrase-add">
+                            <input type="text" id="settingsPhraseInput" class="settings-input" placeholder="Nova frase de ativação...">
+                            <button class="settings-btn" id="settingsPhraseAdd">ADICIONAR</button>
+                        </div>
+                        <button class="settings-btn-link" id="settingsPhraseReset">restaurar frases padrão</button>
+                    </section>
+
+                    <!-- Música de fundo (SCRUM-22) -->
+                    <section class="settings-section">
+                        <h3 class="settings-section-title">PLAYLIST DE MÚSICA</h3>
+                        <p class="settings-section-hint">Arquivos escolhidos aqui só valem para esta sessão (não ficam salvos no navegador — são áudios locais do seu computador).</p>
+                        <ul class="settings-playlist" id="settingsPlaylist"></ul>
+                        <div class="settings-phrase-add">
+                            <input type="file" id="settingsMusicInput" accept="audio/*" multiple hidden>
+                            <button class="settings-btn" id="settingsMusicAdd">+ ADICIONAR FAIXAS</button>
+                        </div>
+                    </section>
+
+                    <!-- Modelo de IA (SCRUM-23) -->
+                    <section class="settings-section">
+                        <h3 class="settings-section-title">MODELO DE IA</h3>
+                        <p class="settings-section-hint" id="settingsLLMHint">Modelo que responde no orquestrador (afeta e-mail/agenda/contatos — a voz em si é sempre ElevenLabs).</p>
+                        <div class="settings-llm-row">
+                            <label class="settings-label">Provedor</label>
+                            <select id="settingsLLMProvider" class="settings-input">
+                                <option value="anthropic">Anthropic (nuvem)</option>
+                                <option value="ollama">Ollama (local)</option>
+                            </select>
+                        </div>
+                        <div class="settings-llm-row">
+                            <label class="settings-label">Modelo</label>
+                            <input type="text" id="settingsLLMModel" class="settings-input" placeholder="ex.: claude-opus-5, qwen3:4b, llama3.1...">
+                        </div>
+                        <div class="settings-llm-row">
+                            <button class="settings-btn" id="settingsLLMSave">SALVAR</button>
+                            <span class="settings-llm-status" id="settingsLLMStatus"></span>
+                        </div>
+                    </section>
+                </div>
             </div>
         </div>
 

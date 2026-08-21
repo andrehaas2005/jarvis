@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-opus-5"
     jarvis_webhook_secret: str | None = None
+    # Modelo local (SCRUM-23) — só usado quando a Settings Page troca o provedor
+    # ativo para "ollama" (ver app/settings_store.py). Servidor Ollama roda fora
+    # deste container; aponte para onde ele estiver (ex.: rede Docker, VPN, etc.).
+    ollama_base_url: str = "http://localhost:11434"
 
     # Painel de créditos (HUD) — Admin API key, só leitura de uso/custo.
     anthropic_admin_api_key: str | None = None
