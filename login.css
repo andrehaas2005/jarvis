@@ -166,3 +166,27 @@
         letter-spacing: 4px;
     }
 }
+
+/* Rodapé de Termos/Privacidade (SCRUM-62) */
+.login-legal-footer {
+    text-align: center;
+    padding: 16px 0 20px;
+    font-family: 'Roboto', sans-serif;
+    font-size: 0.75rem;
+    color: var(--hud-text-dim);
+    opacity: 0.6;
+}
+
+.login-legal-footer a {
+    color: var(--hud-text-dim);
+    text-decoration: none;
+}
+
+.login-legal-footer a:hover {
+    color: var(--hud-blue);
+    text-decoration: underline;
+}
+
+.login-legal-footer span {
+    margin: 0 8px;
+}

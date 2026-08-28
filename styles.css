@@ -327,6 +327,10 @@ body {
     line-height: 1.4;
 }
 
+.settings-section-hint a {
+    color: var(--hud-blue);
+}
+
 .settings-phrase-list,
 .settings-playlist {
     list-style: none;

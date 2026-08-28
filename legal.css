@@ -1,0 +1,120 @@
+/* Páginas legais (Termos de Uso e Política de Privacidade — SCRUM-62).
+   Exigência do Google pra publicar o app OAuth em produção: a tela de
+   consentimento (Testing -> Production) precisa de links públicos pra essas
+   duas páginas, alcançáveis a partir do site do app. Usa o mesmo tema visual
+   do resto do HUD (:root em styles.css), mas com tipografia legível pra
+   texto corrido — Orbitron só nos títulos, Roboto no corpo. */
+
+.legal-body {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #000000 0%, #0a0a0a 30%, #1a1a2e 70%, #000000 100%);
+    color: var(--hud-text-dim);
+    font-family: 'Roboto', sans-serif;
+    overflow-x: hidden;
+}
+
+.legal-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--hud-grid);
+    background: rgba(5, 5, 5, 0.6);
+    backdrop-filter: blur(8px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.legal-back {
+    color: var(--hud-blue);
+    text-decoration: none;
+    font-family: 'Orbitron', monospace;
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    border: 1px solid var(--hud-blue);
+    border-radius: 4px;
+    padding: 6px 14px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.legal-back:hover {
+    background: var(--hud-blue);
+    color: var(--hud-darker);
+}
+
+.legal-container {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+    line-height: 1.7;
+}
+
+.legal-container h1 {
+    font-family: 'Orbitron', monospace;
+    color: var(--hud-blue);
+    font-size: 1.8rem;
+    letter-spacing: 0.03em;
+    margin-bottom: 4px;
+}
+
+.legal-updated {
+    color: var(--hud-text-dim);
+    opacity: 0.6;
+    font-size: 0.85rem;
+    margin-bottom: 32px;
+}
+
+.legal-container h2 {
+    font-family: 'Orbitron', monospace;
+    color: var(--hud-cyan);
+    font-size: 1.15rem;
+    margin-top: 40px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--hud-grid);
+    padding-bottom: 8px;
+}
+
+.legal-container h3 {
+    font-family: 'Orbitron', monospace;
+    color: var(--hud-text);
+    font-size: 1rem;
+    margin-top: 24px;
+    margin-bottom: 10px;
+}
+
+.legal-container h4 {
+    color: var(--hud-text);
+    font-size: 0.95rem;
+    margin-top: 18px;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.legal-container p {
+    margin-bottom: 14px;
+    font-size: 0.92rem;
+}
+
+.legal-container ul {
+    margin: 0 0 16px 20px;
+    padding: 0;
+}
+
+.legal-container li {
+    margin-bottom: 8px;
+    font-size: 0.92rem;
+}
+
+.legal-container a {
+    color: var(--hud-blue);
+}
+
+@media (max-width: 640px) {
+    .legal-container {
+        padding: 32px 16px 64px;
+    }
+    .legal-topbar {
+        padding: 12px 16px;
+    }
+}
