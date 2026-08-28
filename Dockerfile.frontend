@@ -15,6 +15,10 @@ COPY earthhologram.gif radar.gif /usr/share/nginx/html/
 
 # Login do HUD (SCRUM-56)
 COPY login.html login.css login.js /usr/share/nginx/html/
+
+# Termos de Uso / Política de Privacidade (SCRUM-62) — exigidos pelo Google
+# pra publicar a tela de consentimento OAuth (Testing -> Production).
+COPY terms.html privacy.html legal.css /usr/share/nginx/html/
 COPY assets/brand/ /usr/share/nginx/html/assets/brand/
 
 EXPOSE 80
