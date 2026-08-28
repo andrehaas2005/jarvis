@@ -45,6 +45,15 @@
         </div>
     </div>
 
+    <!-- Links de Termos/Privacidade (SCRUM-62) — exigidos pelo Google pra publicar a tela de
+         consentimento OAuth em produção (Testing -> Production): o verificador procura por eles
+         a partir da página pública do app, que é esta (index.html redireciona pra cá sem login). -->
+    <div class="login-legal-footer">
+        <a href="terms.html">Termos de Uso</a>
+        <span>&middot;</span>
+        <a href="privacy.html">Política de Privacidade</a>
+    </div>
+
     <script src="login.js"></script>
 </body>
 </html>
