@@ -8,6 +8,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="assets/brand/favicon-16.png">
     <link rel="apple-touch-icon" sizes="128x128" href="assets/brand/favicon-128.png">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="chat.css">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
     <!-- Guarda de login (SCRUM-56): roda antes de qualquer coisa renderizar — sem token
          salvo, manda pra login.html direto, sem piscar o HUD antes. Validação completa
@@ -69,6 +70,9 @@
                 </div>
                 <button class="topbar-sleep" id="topbarSleep" title="Encerrar conversa">
                     <span class="topbar-sleep-icon">&#9211;</span> SLEEP
+                </button>
+                <button class="topbar-chat" id="topbarChat" title="Chat de texto com o Jarvis (ou diga 'Jarvis, abrir chat')">
+                    <span class="topbar-chat-icon">&#128172;</span> CHAT
                 </button>
                 <button class="topbar-settings" id="topbarSettings" title="Configurações (ou diga 'Jarvis, abrir configurações')">
                     &#9881;
@@ -462,6 +466,32 @@
         </div>
     </div>
 
+    <!-- Painel de Chat de Texto (SCRUM-26/27/28) — reaproveitável pra qualquer feature futura
+         que precise mostrar texto pro usuário revisar (ex.: rascunho de email antes de enviar),
+         não só uma conversa solta. Aberto por: botão CHAT na topbar, voz ("Jarvis, abre chat"),
+         ou sozinho quando o backend publica algo na sessão via SSE (ver chat.js). Redimensionável
+         por arraste (desktop) via #jarvisChatResizeHandle; em mobile ocupa a tela inteira, com
+         botão de minimizar (vira uma pílula flutuante, pra dar uma espiada no HUD) e de fechar. -->
+    <div class="jarvis-chat-panel" id="jarvisChatPanel" hidden>
+        <div class="jarvis-chat-resize-handle" id="jarvisChatResizeHandle" title="Arraste para redimensionar"></div>
+        <div class="jarvis-chat-header">
+            <span class="jarvis-chat-title">&#128172; CHAT COM O JARVIS</span>
+            <div class="jarvis-chat-header-actions">
+                <button class="jarvis-chat-minimize" id="jarvisChatMinimize" title="Minimizar">&#8211;</button>
+                <button class="jarvis-chat-close" id="jarvisChatClose" title="Fechar">&times;</button>
+            </div>
+        </div>
+        <div class="jarvis-chat-messages" id="jarvisChatMessages"></div>
+        <div class="jarvis-chat-input-row">
+            <button class="jarvis-chat-attach" id="jarvisChatAttachPhoto" title="Anexar foto/imagem (em breve)">&#128247;</button>
+            <button class="jarvis-chat-attach" id="jarvisChatAttachFile" title="Anexar arquivo/PDF (em breve)">&#128206;</button>
+            <textarea class="jarvis-chat-input" id="jarvisChatInput" placeholder="Escreva para o Jarvis..." rows="1"></textarea>
+            <button class="jarvis-chat-send" id="jarvisChatSend" title="Enviar">&#10148;</button>
+        </div>
+    </div>
+    <!-- Bolha flutuante que substitui o painel quando minimizado em mobile (ver chat.js). -->
+    <button class="jarvis-chat-fab" id="jarvisChatFab" hidden title="Abrir chat">&#128172;</button>
+
     <!-- Música de fundo tocada durante a conversa (25% do volume da voz do Jarvis — ver
          script.js). Sem arquivo por padrão: coloque um mp3/wav em assets/music/ e aponte
          BACKGROUND_MUSIC_SRC no script.js para ativar. -->
@@ -487,6 +517,7 @@
     <!-- Controle por gestos (rastreamento de mão via MediaPipe, ver gestures.js). -->
     <script type="module" src="gestures.js"></script>
 
+    <script src="chat.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

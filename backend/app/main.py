@@ -5,14 +5,18 @@ MCP Servers (Gmail, Calendar) com retry e idempotência, evitando os bugs
 SCRUM-45 (email disparando 8x) e SCRUM-46 (falta de atomicidade).
 """
 
+import asyncio
 import hmac
+import json
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.auth import User, authenticate, init_db, issue_token, verify_token
+from app.chat_stream import publish, subscribe, unsubscribe
 from app.config import get_settings
 from app.elevenlabs import get_signed_conversation_url
 from app.logging_config import get_logger, setup_logging
@@ -279,4 +283,81 @@ async def jarvis_webhook(
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    # Publica no stream do chat (SCRUM-26) — se o HUD tiver o painel aberto
+    # ouvindo essa mesma sessão, a troca por voz aparece lá também (texto e
+    # voz são a mesma conversa). Sem assinantes, é descartado sem custo.
+    publish(session_id, role="user", text=query)
+    publish(session_id, role="assistant", text=answer)
+
     return {"query": answer}
+
+
+class ChatMessageRequest(BaseModel):
+    message: str
+    session_id: str
+    # Gerado pelo frontend (chat.js) — ver chat_stream.publish() pro motivo
+    # de existir (evitar mensagem duplicada por causa de corrida com o SSE).
+    client_msg_id: str = ""
+
+
+@app.post("/chat/message")
+async def chat_message(
+    body: ChatMessageRequest, authorization: str | None = Header(default=None)
+) -> dict:
+    """Chat de texto (SCRUM-26) — mesmo orquestrador da voz
+    (`orchestrator/router.py`), mesma memória de sessão por `session_id`:
+    uma mensagem digitada aqui continua a conversa de voz em andamento (se
+    o frontend mandar o `conversation_id` do SDK do ElevenLabs) ou uma
+    conversa só-texto (session_id gerado pelo frontend, ex. 'text-<uuid>').
+    Serve tanto pra pedidos novos quanto pra aprovar/editar um rascunho
+    (email, etc.) que o Jarvis mostrou no chat."""
+    _require_user(authorization)
+    if not body.message.strip():
+        raise HTTPException(status_code=400, detail="campo 'message' obrigatório")
+
+    try:
+        answer = await handle_query(body.message, body.session_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    publish(body.session_id, role="user", text=body.message, client_msg_id=body.client_msg_id)
+    publish(body.session_id, role="assistant", text=answer, client_msg_id=body.client_msg_id)
+
+    return {"reply": answer}
+
+
+@app.get("/chat/stream")
+async def chat_stream(session_id: str, token: str = "") -> StreamingResponse:
+    """Server-Sent Events do chat (SCRUM-26) — o painel do HUD assina isso
+    pra saber em tempo real quando o Jarvis tem algo novo pra mostrar (ex.:
+    resposta de uma pergunta feita por voz, ou o rascunho de um email),
+    sem precisar dar F5. `token` vem por query string em vez de header
+    `Authorization` porque a API `EventSource` do navegador não permite
+    header customizado."""
+    user = verify_token(token) if token else None
+    if user is None:
+        raise HTTPException(status_code=401, detail="Token inválido ou expirado")
+
+    queue = subscribe(session_id)
+
+    async def event_stream():
+        try:
+            while True:
+                try:
+                    message = await asyncio.wait_for(queue.get(), timeout=25.0)
+                    yield f"data: {json.dumps(message)}\n\n"
+                except TimeoutError:
+                    # Keep-alive — sem isso, proxies (Cloudflare/nginx) derrubam
+                    # a conexão SSE por inatividade antes de qualquer mensagem real chegar.
+                    yield ": keep-alive\n\n"
+        finally:
+            unsubscribe(session_id, queue)
+
+    # Cache-Control/X-Accel-Buffering: sem isso, proxies na frente da API (ver
+    # nginx.frontend.conf — Cloudflare já causou bug real de cache aqui antes)
+    # podem enfileirar os eventos em vez de entregar em tempo real.
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )

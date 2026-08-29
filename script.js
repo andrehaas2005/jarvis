@@ -1078,6 +1078,18 @@ class JARVISInterface {
 
             const rawHeard = `${this.wakeTranscriptBuffer} ${interim}`;
             const heard = JARVISInterface.normalizeSpeech(rawHeard);
+
+            // "Jarvis, abre o chat" (SCRUM-27) — checado antes das frases de ativação de
+            // conversa: abre o painel de texto (chat.js) sem iniciar uma ligação de voz.
+            const chatPhrases = ['jarvis, abre o chat', 'jarvis, abre chat', 'jarvis, abrir chat', 'abre o chat'];
+            const matchedChatPhrase = chatPhrases.find((phrase) => heard.includes(JARVISInterface.normalizeSpeech(phrase)));
+            if (matchedChatPhrase && window.jarvisChat) {
+                this.pushLog(`[VOZ] Comando reconhecido: "${matchedChatPhrase}" — abrindo chat`);
+                this.wakeTranscriptBuffer = '';
+                window.jarvisChat.open();
+                return;
+            }
+
             const matchedPhrase = this.wakePhrases.find((phrase) => heard.includes(JARVISInterface.normalizeSpeech(phrase)));
             if (matchedPhrase) {
                 this.pushLog(`[VOZ] Frase de ativação reconhecida: "${matchedPhrase}"`);
@@ -1799,6 +1811,11 @@ class JARVISInterface {
                 onConnect: ({ conversationId }) => {
                     this.conversationStarting = false;
                     this.conversationActive = true;
+                    // Exposto pra chat.js (SCRUM-26) poder mandar mensagens de texto pra
+                    // dentro da MESMA sessão/memória da conversa de voz em andamento —
+                    // sem isso, o chat e a voz falariam com "memórias" diferentes.
+                    this.activeConversationId = conversationId;
+                    window.jarvisChat?.resubscribe();
                     this.updateVoiceButtonState('listening');
                     this.updateVoiceStatus('JARVIS CONECTADO');
                     this.pushLog(`[REDE] Conectado — sessão ${conversationId.slice(0, 8)}…`);
@@ -1814,6 +1831,8 @@ class JARVISInterface {
                 onDisconnect: (details) => {
                     this.conversationActive = false;
                     this.conversation = null;
+                    this.activeConversationId = null;
+                    window.jarvisChat?.resubscribe();
                     this.updateVoiceButtonState('idle');
                     this.updateVoiceStatus('SISTEMA ATIVO');
                     const motivo = details?.reason === 'error'
