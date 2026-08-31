@@ -100,35 +100,162 @@ body {
     letter-spacing: 2px;
 }
 
-.topbar-actions {
+/* Menu hambúrguer: todos os botões que antes viviam soltos na topbar (voz, música, câmera,
+   gestos, tela cheia, sleep, chat, configurações) agora moram aqui dentro — a barra cheia de
+   botões não cabia em telas estreitas e virava scroll horizontal, cortando itens (achado real
+   em produção). Ver setupHamburgerMenu() em script.js. */
+.topbar-hamburger {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 14px;
-    /* Em telas estreitas os botões não cabem todos — em vez de estourar a tela (cortando os
-       últimos, inclusive SLEEP), a barra vira scroll horizontal por toque. Não afeta desktop
-       (tudo cabe, não sobra o que rolar). min-width:0 é o que permite esse item flex encolher
-       abaixo do conteúdo — sem isso o overflow-x:auto não tem efeito nenhum. */
-    overflow-x: auto;
-    scrollbar-width: none;
-    min-width: 0;
+    justify-content: center;
+    gap: 5px;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    background: rgba(0, 212, 255, 0.06);
+    border: 1px solid var(--hud-blue);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
-.topbar-actions::-webkit-scrollbar {
+.topbar-hamburger:hover {
+    background: rgba(0, 212, 255, 0.2);
+    box-shadow: 0 0 10px var(--hud-blue);
+}
+
+.hamburger-bar {
+    width: 18px;
+    height: 2px;
+    background: var(--hud-blue);
+    border-radius: 1px;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.topbar-hamburger[aria-expanded="true"] .hamburger-bar:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
+
+.topbar-hamburger[aria-expanded="true"] .hamburger-bar:nth-child(2) {
+    opacity: 0;
+}
+
+.topbar-hamburger[aria-expanded="true"] .hamburger-bar:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
+/* position:fixed calculado em JS (positionHamburgerMenu()) — mesmo motivo do
+   wake-phrases-popover: a topbar não tem mais overflow-x:auto, mas o painel precisa
+   flutuar por cima de tudo de qualquer forma, então já nasce no padrão certo. */
+.hamburger-menu {
+    position: fixed;
+    z-index: 90;
+    width: 300px;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 90px);
+    display: flex;
+    flex-direction: column;
+    background: #000814;
+    border: 1px solid var(--hud-blue);
+    border-radius: 10px;
+    box-shadow: 0 0 30px rgba(0, 212, 255, 0.25);
+    overflow: hidden;
+}
+
+.hamburger-menu[hidden] {
     display: none;
 }
 
-.topbar-actions > * {
+.hamburger-menu-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(0, 212, 255, 0.25);
     flex-shrink: 0;
 }
 
-/* Quem está logado (SCRUM-56) — ver topbarLogout/renderLoggedInUser em script.js. */
-.topbar-user {
+.hamburger-menu-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 2px;
+    color: var(--hud-blue);
+}
+
+.hamburger-menu-close {
+    background: none;
+    border: none;
+    color: var(--hud-text-dim);
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+.hamburger-menu-close:hover {
+    color: var(--hud-text);
+}
+
+.hamburger-menu-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px;
+    overflow-y: auto;
+}
+
+.hamburger-section-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 2px;
+    color: var(--hud-text-dim);
+    margin-top: 6px;
+}
+
+.hamburger-section-label:first-child {
+    margin-top: 0;
+}
+
+/* Estilo comum de linha pra todo item do menu — as classes específicas (.topbar-wake,
+   .topbar-sleep etc.) continuam existindo só pros hooks de JS e as variações de cor
+   (ativo/verde, sleep/vermelho); o layout de "linha cheia com ícone" é sempre este. */
+.hamburger-item {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-left: 16px;
-    padding-left: 16px;
-    border-left: 1px solid rgba(0, 212, 255, 0.25);
+    width: 100%;
+    background: rgba(0, 212, 255, 0.05);
+    border: 1px solid rgba(0, 212, 255, 0.25);
+    color: var(--hud-blue);
+    font-family: 'Orbitron', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 1px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s ease;
+}
+
+.hamburger-item:hover {
+    background: rgba(0, 212, 255, 0.15);
+    box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+}
+
+.hamburger-item-icon {
+    font-size: 0.9rem;
+}
+
+/* Quem está logado (SCRUM-56) — ver topbarLogout/renderLoggedInUser em script.js. */
+.hamburger-user-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid rgba(0, 212, 255, 0.25);
 }
 
 .topbar-user-name {
@@ -195,19 +322,9 @@ body {
 }
 
 .topbar-sleep {
-    display: flex;
-    align-items: center;
-    gap: 6px;
     background: rgba(255, 60, 60, 0.08);
-    border: 1px solid #ff4d4d;
+    border-color: #ff4d4d;
     color: #ff4d4d;
-    font-family: 'Orbitron', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 1px;
-    padding: 6px 14px;
-    border-radius: 20px;
-    cursor: pointer;
-    transition: all 0.2s ease;
 }
 
 .topbar-sleep:hover {
@@ -221,26 +338,9 @@ body {
     box-shadow: none;
 }
 
-/* Settings Page (SCRUM-20/21/22/23) */
-.topbar-settings {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    flex-shrink: 0;
-    background: rgba(0, 212, 255, 0.06);
-    border: 1px solid var(--hud-blue);
-    border-radius: 50%;
-    color: var(--hud-blue);
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.topbar-settings:hover {
-    background: rgba(0, 212, 255, 0.2);
-    box-shadow: 0 0 10px var(--hud-blue);
+/* Settings Page (SCRUM-20/21/22/23) — layout base vem de .hamburger-item */
+.topbar-settings:hover .hamburger-item-icon {
+    display: inline-block;
     transform: rotate(45deg);
 }
 
@@ -927,52 +1027,10 @@ select.settings-input {
 }
 
 /* Botão SHARE VISION na barra superior */
-.topbar-vision {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(0, 212, 255, 0.06);
-    border: 1px solid var(--hud-blue);
-    color: var(--hud-blue);
-    font-family: 'Orbitron', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 1px;
-    padding: 6px 14px;
-    border-radius: 20px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.topbar-vision:hover {
-    background: rgba(0, 212, 255, 0.2);
-    box-shadow: 0 0 10px var(--hud-blue);
-}
-
 .topbar-vision.active {
     background: rgba(0, 255, 136, 0.12);
     border-color: #00ff88;
     color: #00ff88;
-}
-
-.topbar-gestures {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(0, 212, 255, 0.06);
-    border: 1px solid var(--hud-blue);
-    color: var(--hud-blue);
-    font-family: 'Orbitron', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 1px;
-    padding: 6px 14px;
-    border-radius: 20px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.topbar-gestures:hover {
-    background: rgba(0, 212, 255, 0.2);
-    box-shadow: 0 0 10px var(--hud-blue);
 }
 
 .topbar-gestures.active {
@@ -981,52 +1039,10 @@ select.settings-input {
     color: #00ff88;
 }
 
-.topbar-fullscreen {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(0, 212, 255, 0.06);
-    border: 1px solid var(--hud-blue);
-    color: var(--hud-blue);
-    font-family: 'Orbitron', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 1px;
-    padding: 6px 14px;
-    border-radius: 20px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.topbar-fullscreen:hover {
-    background: rgba(0, 212, 255, 0.2);
-    box-shadow: 0 0 10px var(--hud-blue);
-}
-
 .topbar-fullscreen.active {
     background: rgba(0, 255, 136, 0.12);
     border-color: #00ff88;
     color: #00ff88;
-}
-
-.topbar-wake {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(0, 212, 255, 0.06);
-    border: 1px solid var(--hud-blue);
-    color: var(--hud-blue);
-    font-family: 'Orbitron', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 1px;
-    padding: 6px 14px;
-    border-radius: 20px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.topbar-wake:hover {
-    background: rgba(0, 212, 255, 0.2);
-    box-shadow: 0 0 10px var(--hud-blue);
 }
 
 /* Ouvindo a frase de ativação — pulso sutil pra diferenciar de "vision/gestos ativos" (verde) */
@@ -1045,42 +1061,19 @@ select.settings-input {
 .wake-phrases-wrapper {
     position: relative;
     display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.topbar-wake-info {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
-    background: transparent;
-    border: 1px solid rgba(0, 212, 255, 0.4);
-    border-radius: 50%;
-    color: var(--hud-blue);
-    font-size: 0.8rem;
-    line-height: 1;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.topbar-wake-info:hover {
-    background: rgba(0, 212, 255, 0.15);
-    box-shadow: 0 0 8px var(--hud-blue);
+    flex-direction: column;
+    gap: 6px;
 }
 
 .wake-phrases-popover {
-    /* position:fixed (não absolute) de propósito — o pai (.topbar-actions) tem
-       overflow-x:auto pro scroll horizontal em telas estreitas, e isso faz o
-       navegador tratar overflow-y como "auto" também (regra do CSS: os dois eixos
-       não podem ficar em combinações "visible"/não-visible), cortando qualquer
-       descendente position:absolute que vaze pra fora da faixa — o popover abria
-       no DOM (hidden=false) mas nunca aparecia na tela (bug real relatado pelo
-       usuário). Com fixed, a posição é calculada em JS (setupWakePhrasesPopover)
-       a partir do getBoundingClientRect() do wrapper, então escapa do clipping.
-       Ver [[wake-phrases-popover-overflow-clip]] no memory. */
+    /* position:fixed (não absolute) de propósito — histórico: quando este popover vivia
+       direto na topbar, o ancestral (.topbar-actions) tinha overflow-x:auto pro scroll
+       horizontal, e isso cortava qualquer descendente position:absolute que vazasse pra
+       fora da faixa — o popover abria no DOM (hidden=false) mas nunca aparecia na tela
+       (bug real relatado pelo usuário). Agora ele vive dentro do menu hambúrguer
+       (.hamburger-menu, também position:fixed), mas o padrão continua o mesmo por
+       segurança: posição calculada em JS (positionWakePhrasesPopover(), a partir do
+       getBoundingClientRect() do wrapper) em vez de depender do fluxo do ancestral. */
     position: fixed;
     z-index: 20;
     width: 250px;
@@ -1127,27 +1120,6 @@ select.settings-input {
     color: var(--hud-cyan);
 }
 
-.topbar-music {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(0, 212, 255, 0.06);
-    border: 1px solid var(--hud-blue);
-    color: var(--hud-blue);
-    font-family: 'Orbitron', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 1px;
-    padding: 6px 14px;
-    border-radius: 20px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.topbar-music:hover {
-    background: rgba(0, 212, 255, 0.2);
-    box-shadow: 0 0 10px var(--hud-blue);
-}
-
 .topbar-music.active {
     background: rgba(0, 255, 136, 0.12);
     border-color: #00ff88;
@@ -1156,26 +1128,6 @@ select.settings-input {
 
 .topbar-music.muted {
     opacity: 0.45;
-}
-
-.topbar-music-swap {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 212, 255, 0.06);
-    border: 1px solid var(--hud-blue);
-    color: var(--hud-blue);
-    font-size: 0.75rem;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.topbar-music-swap:hover {
-    background: rgba(0, 212, 255, 0.2);
-    box-shadow: 0 0 10px var(--hud-blue);
 }
 
 /* ============================= Canvas de gestos ============================= */
