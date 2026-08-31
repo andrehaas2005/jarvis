@@ -21,6 +21,7 @@ from app.orchestrator.status_tracker import get_status_tracker
 from mcp_servers.calendar import server as calendar_server
 from mcp_servers.contacts import server as contacts_server
 from mcp_servers.gmail import server as gmail_server
+from mcp_servers.google_workspace import server as google_workspace_server
 from mcp_servers.obsidian import server as obsidian_server
 from mcp_servers.websearch import server as websearch_server
 
@@ -264,6 +265,86 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "search_drive_files",
+        "description": "Busca arquivos no Google Drive do usuário por nome (não precisa ser exato). Use pra achar uma planilha/documento antes de ler/editar, ou pra confirmar se um arquivo existe.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}, "max_results": {"type": "integer", "default": 10}},
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "read_sheet",
+        "description": "Lê os valores de uma planilha do Google Sheets. `spreadsheet` aceita o NOME da planilha (ex.: 'Setembro/26 - Orçamento mensal') ou o ID — nome é resolvido automaticamente no Drive. Sem `cell_range`, lê a primeira aba inteira.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"spreadsheet": {"type": "string"}, "cell_range": {"type": "string", "default": ""}},
+            "required": ["spreadsheet"],
+        },
+    },
+    {
+        "name": "write_sheet",
+        "description": "Escreve/sobrescreve valores num intervalo de células de uma planilha (ex.: 'Página1!A2:D2'). `values` é uma lista de linhas, cada linha uma lista de valores das colunas.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "spreadsheet": {"type": "string"},
+                "cell_range": {"type": "string"},
+                "values": {"type": "array", "items": {"type": "array"}},
+            },
+            "required": ["spreadsheet", "cell_range", "values"],
+        },
+    },
+    {
+        "name": "append_sheet_row",
+        "description": "Acrescenta UMA linha nova ao final de uma aba da planilha, sem sobrescrever nada existente — use pra 'lançar' um item novo (ex.: uma conta de cobrança). `values` é a lista de valores das colunas, na ordem.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "spreadsheet": {"type": "string"},
+                "sheet_name": {"type": "string"},
+                "values": {"type": "array", "items": {}},
+            },
+            "required": ["spreadsheet", "sheet_name", "values"],
+        },
+    },
+    {
+        "name": "create_spreadsheet",
+        "description": "Cria uma planilha nova e vazia no Google Sheets com o título dado.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"title": {"type": "string"}},
+            "required": ["title"],
+        },
+    },
+    {
+        "name": "read_doc",
+        "description": "Lê o conteúdo de texto de um Google Docs. `document` aceita nome ou ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"document": {"type": "string"}},
+            "required": ["document"],
+        },
+    },
+    {
+        "name": "append_doc",
+        "description": "Acrescenta texto ao final de um Google Docs existente. `document` aceita nome ou ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"document": {"type": "string"}, "text": {"type": "string"}},
+            "required": ["document", "text"],
+        },
+    },
+    {
+        "name": "create_doc",
+        "description": "Cria um Google Docs novo com o título dado, opcionalmente já com conteúdo inicial.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"title": {"type": "string"}, "content": {"type": "string", "default": ""}},
+            "required": ["title"],
+        },
+    },
+    {
         "name": "check_service_connections",
         "description": (
             "Testa a conexão real com Email, Agenda e Contatos agora (chamada leve e "
@@ -364,6 +445,36 @@ async def _dispatch(name: str, tool_input: dict[str, Any]) -> Any:
         )
     if name == "append_note":
         return await obsidian_server.append_note(path=tool_input["path"], content=tool_input["content"])
+    if name == "search_drive_files":
+        return await google_workspace_server.search_drive_files(
+            query=tool_input["query"], max_results=tool_input.get("max_results", 10)
+        )
+    if name == "read_sheet":
+        return await google_workspace_server.read_sheet(
+            spreadsheet=tool_input["spreadsheet"], cell_range=tool_input.get("cell_range", "")
+        )
+    if name == "write_sheet":
+        return await google_workspace_server.write_sheet(
+            spreadsheet=tool_input["spreadsheet"],
+            cell_range=tool_input["cell_range"],
+            values=tool_input["values"],
+        )
+    if name == "append_sheet_row":
+        return await google_workspace_server.append_sheet_row(
+            spreadsheet=tool_input["spreadsheet"],
+            sheet_name=tool_input["sheet_name"],
+            values=tool_input["values"],
+        )
+    if name == "create_spreadsheet":
+        return await google_workspace_server.create_spreadsheet(title=tool_input["title"])
+    if name == "read_doc":
+        return await google_workspace_server.read_doc(document=tool_input["document"])
+    if name == "append_doc":
+        return await google_workspace_server.append_doc(document=tool_input["document"], text=tool_input["text"])
+    if name == "create_doc":
+        return await google_workspace_server.create_doc(
+            title=tool_input["title"], content=tool_input.get("content", "")
+        )
     if name == "check_service_connections":
         # import local pra evitar ciclo (connection_check importa execute_tool daqui)
         from app.orchestrator.connection_check import check_all_connections
