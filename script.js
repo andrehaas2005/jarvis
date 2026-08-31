@@ -48,6 +48,9 @@ class JARVISInterface {
         this.seenSourceUrls = new Set();
         this.topbarStatus = document.getElementById('topbarStatus');
         this.topbarStatusText = document.getElementById('topbarStatusText');
+        this.topbarHamburger = document.getElementById('topbarHamburger');
+        this.hamburgerMenu = document.getElementById('hamburgerMenu');
+        this.hamburgerMenuClose = document.getElementById('hamburgerMenuClose');
         this.topbarSleep = document.getElementById('topbarSleep');
         this.topbarVision = document.getElementById('topbarVision');
         this.visionPreview = document.getElementById('visionPreview');
@@ -262,6 +265,71 @@ class JARVISInterface {
         this.setupWakeWordListener();
         this.setupVisionPreviewDrag();
         this.setupSettingsModal();
+        this.setupHamburgerMenu();
+    }
+
+    // Menu hambúrguer: agrupa tudo que antes vivia solto na topbar (voz, música, câmera,
+    // gestos, tela cheia, sleep, chat, configurações) — a barra cheia de botões não cabia em
+    // telas estreitas e virava scroll horizontal, cortando itens (achado real em produção).
+    // Painel dropdown com position:fixed calculado aqui, mesmo padrão do
+    // positionWakePhrasesPopover() — evita o bug de clipping que o popover de frases teve
+    // quando um ancestral tinha overflow não-visible.
+    positionHamburgerMenu() {
+        if (!this.hamburgerMenu || !this.topbarHamburger) return;
+        const rect = this.topbarHamburger.getBoundingClientRect();
+        const MENU_WIDTH = 300;
+        let left = rect.right - MENU_WIDTH;
+        left = Math.max(12, Math.min(left, window.innerWidth - MENU_WIDTH - 12));
+        this.hamburgerMenu.style.top = `${rect.bottom + 10}px`;
+        this.hamburgerMenu.style.left = `${left}px`;
+    }
+
+    closeHamburgerMenu() {
+        if (!this.hamburgerMenu || this.hamburgerMenu.hidden) return;
+        this.hamburgerMenu.hidden = true;
+        this.topbarHamburger?.setAttribute('aria-expanded', 'false');
+        // Fecha também o popover de frases de ativação se estiver aberto dentro do menu —
+        // senão ele reaparece "grudado" na tela errada da próxima vez que o menu abrir.
+        if (this.wakePhrasesPopover) this.wakePhrasesPopover.hidden = true;
+    }
+
+    setupHamburgerMenu() {
+        if (!this.topbarHamburger || !this.hamburgerMenu) return;
+
+        this.topbarHamburger.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const willOpen = this.hamburgerMenu.hidden;
+            if (willOpen) {
+                this.positionHamburgerMenu();
+                this.hamburgerMenu.hidden = false;
+                this.topbarHamburger.setAttribute('aria-expanded', 'true');
+            } else {
+                this.closeHamburgerMenu();
+            }
+        });
+
+        this.hamburgerMenuClose?.addEventListener('click', () => this.closeHamburgerMenu());
+
+        // Clicar em qualquer item do menu fecha o menu em seguida (exceto o botão "ver frases
+        // de ativação", que abre um popover próprio dentro do mesmo menu).
+        document.querySelector('.hamburger-menu-body')?.addEventListener('click', (event) => {
+            const item = event.target.closest('.hamburger-item');
+            if (item && item.id !== 'topbarWakeInfo') this.closeHamburgerMenu();
+        });
+
+        document.addEventListener('click', (event) => {
+            if (this.hamburgerMenu.hidden) return;
+            if (this.hamburgerMenu.contains(event.target) || event.target === this.topbarHamburger) return;
+            this.closeHamburgerMenu();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !this.hamburgerMenu.hidden) this.closeHamburgerMenu();
+        });
+
+        window.addEventListener('resize', () => {
+            if (!this.hamburgerMenu.hidden) this.positionHamburgerMenu();
+        });
     }
 
     // ------------------------------------------------------------------

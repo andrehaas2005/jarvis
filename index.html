@@ -31,51 +31,79 @@
                 <span class="topbar-brand-name">JARVIS</span>
                 <span class="topbar-brand-sub">HUD SYSTEM</span>
             </div>
-            <!-- Quem está logado (SCRUM-56) + sair — preenchido em script.js a partir do
-                 usuário salvo no login (localStorage), sem chamada extra à toa. -->
-            <div class="topbar-user" id="topbarUser">
-                <span class="topbar-user-name" id="topbarUserName"></span>
-                <button class="topbar-logout" id="topbarLogout" title="Sair">&#9099;</button>
+
+            <div class="topbar-status" id="topbarStatus">
+                <span class="status-dot-pill"></span>
+                <span id="topbarStatusText">DESCONECTADO</span>
             </div>
-            <div class="topbar-actions">
+
+            <!-- Menu hambúrguer: agrupa tudo que antes vivia solto na topbar (sessão, voz,
+                 música, câmera, gestos, tela cheia, sleep, chat, configurações) — a barra cheia
+                 de botões não cabia em telas estreitas e virava scroll horizontal, cortando
+                 itens (achado real em produção). Painel dropdown com position:fixed calculado
+                 em JS (setupHamburgerMenu(), mesmo padrão do popover de frases de ativação)
+                 evita o bug de clipping que o popover teve. -->
+            <button class="topbar-hamburger" id="topbarHamburger" title="Menu" aria-expanded="false" aria-controls="hamburgerMenu">
+                <span class="hamburger-bar"></span>
+                <span class="hamburger-bar"></span>
+                <span class="hamburger-bar"></span>
+            </button>
+        </div>
+
+        <div class="hamburger-menu" id="hamburgerMenu" hidden>
+            <div class="hamburger-menu-header">
+                <span class="hamburger-menu-title">MENU</span>
+                <button class="hamburger-menu-close" id="hamburgerMenuClose" title="Fechar">&times;</button>
+            </div>
+            <div class="hamburger-menu-body">
+                <!-- Quem está logado (SCRUM-56) + sair — preenchido em script.js a partir do
+                     usuário salvo no login (localStorage), sem chamada extra à toa. -->
+                <div class="hamburger-user-row" id="topbarUser">
+                    <span class="topbar-user-name" id="topbarUserName"></span>
+                    <button class="topbar-logout" id="topbarLogout" title="Sair">&#9099;</button>
+                </div>
+
+                <div class="hamburger-section-label">VOZ</div>
                 <div class="wake-phrases-wrapper">
-                    <button class="topbar-wake" id="topbarWake" title="Ativação por voz: diga 'Jarvis, ativar' (ou outra frase) para iniciar a conversa sem clicar">
+                    <button class="hamburger-item topbar-wake" id="topbarWake" title="Ativação por voz: diga 'Jarvis, ativar' (ou outra frase) para iniciar a conversa sem clicar">
                         <span class="topbar-wake-icon">&#127908;</span> ATIVAÇÃO POR VOZ
                     </button>
-                    <button class="topbar-wake-info" id="topbarWakeInfo" title="Ver as frases de ativação">&#9432;</button>
+                    <button class="hamburger-item topbar-wake-info" id="topbarWakeInfo" title="Ver as frases de ativação">
+                        <span class="hamburger-item-icon">&#9432;</span> VER FRASES DE ATIVAÇÃO
+                    </button>
                     <div class="wake-phrases-popover" id="wakePhrasesPopover" hidden>
                         <div class="wake-phrases-title">FRASES DE ATIVAÇÃO</div>
                         <ul class="wake-phrases-list" id="wakePhrasesList"></ul>
                     </div>
                 </div>
-                <button class="topbar-music" id="topbarMusic" title="Música de fundo durante a conversa (clique para ligar/desligar)">
+
+                <div class="hamburger-section-label">MÍDIA</div>
+                <button class="hamburger-item topbar-music" id="topbarMusic" title="Música de fundo durante a conversa (clique para ligar/desligar)">
                     <span class="topbar-music-icon">&#127925;</span> MÚSICA
                 </button>
-                <button class="topbar-music-swap" id="topbarMusicSwap" title="Testar outro arquivo de música (só nesta sessão — para trocar a faixa padrão, veja assets/music/)">
-                    &#128193;
+                <button class="hamburger-item topbar-music-swap" id="topbarMusicSwap" title="Testar outro arquivo de música (só nesta sessão — para trocar a faixa padrão, veja assets/music/)">
+                    <span class="hamburger-item-icon">&#128193;</span> TROCAR FAIXA
                 </button>
                 <input type="file" id="musicFileInput" accept="audio/*" hidden>
-                <button class="topbar-vision" id="topbarVision" title="Compartilhar câmera com o Jarvis">
+                <button class="hamburger-item topbar-vision" id="topbarVision" title="Compartilhar câmera com o Jarvis">
                     <span class="topbar-vision-icon">&#128247;</span> SHARE VISION
                 </button>
-                <button class="topbar-gestures" id="topbarGestures" title="Canvas de caixas controlado por gestos da mão">
+                <button class="hamburger-item topbar-gestures" id="topbarGestures" title="Canvas de caixas controlado por gestos da mão">
                     <span class="topbar-gestures-icon">&#9995;</span> GESTOS
                 </button>
-                <button class="topbar-fullscreen" id="topbarFullscreen" title="Tela cheia (ou diga 'Jarvis, tela cheia')">
+                <button class="hamburger-item topbar-fullscreen" id="topbarFullscreen" title="Tela cheia (ou diga 'Jarvis, tela cheia')">
                     <span class="topbar-fullscreen-icon" id="topbarFullscreenIcon">&#9974;</span> <span id="topbarFullscreenLabel">TELA CHEIA</span>
                 </button>
-                <div class="topbar-status" id="topbarStatus">
-                    <span class="status-dot-pill"></span>
-                    <span id="topbarStatusText">DESCONECTADO</span>
-                </div>
-                <button class="topbar-sleep" id="topbarSleep" title="Encerrar conversa">
+
+                <div class="hamburger-section-label">SESSÃO</div>
+                <button class="hamburger-item topbar-sleep" id="topbarSleep" title="Encerrar conversa">
                     <span class="topbar-sleep-icon">&#9211;</span> SLEEP
                 </button>
-                <button class="topbar-chat" id="topbarChat" title="Chat de texto com o Jarvis (ou diga 'Jarvis, abrir chat')">
+                <button class="hamburger-item topbar-chat" id="topbarChat" title="Chat de texto com o Jarvis (ou diga 'Jarvis, abrir chat')">
                     <span class="topbar-chat-icon">&#128172;</span> CHAT
                 </button>
-                <button class="topbar-settings" id="topbarSettings" title="Configurações (ou diga 'Jarvis, abrir configurações')">
-                    &#9881;
+                <button class="hamburger-item topbar-settings" id="topbarSettings" title="Configurações (ou diga 'Jarvis, abrir configurações')">
+                    <span class="hamburger-item-icon">&#9881;</span> CONFIGURAÇÕES
                 </button>
             </div>
         </div>
