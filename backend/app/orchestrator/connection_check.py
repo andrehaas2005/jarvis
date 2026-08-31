@@ -25,6 +25,8 @@ _PING_CALLS: dict[str, tuple[str, dict[str, Any]]] = {
     # busca vazia com max_results=1 — só confirma que a pasta do vault existe e é
     # gravável (ObsidianClient.ensure_vault_ok(), chamado antes de qualquer busca).
     "obsidian": ("search_notes", {"query": "", "max_results": 1}),
+    # busca vazia no Drive — só confirma que o token OAuth (SCRUM-61) é válido.
+    "drive": ("search_drive_files", {"query": "", "max_results": 1}),
 }
 
 
@@ -35,7 +37,7 @@ def _calendar_ping_args() -> dict[str, Any]:
     return {"time_min": now.isoformat(), "time_max": (now + timedelta(days=1)).isoformat(), "max_results": 1}
 
 
-CHECKABLE_SERVICES = ("email", "calendar", "contacts", "obsidian")
+CHECKABLE_SERVICES = ("email", "calendar", "contacts", "obsidian", "drive")
 
 
 async def check_service(service: str) -> dict[str, Any]:

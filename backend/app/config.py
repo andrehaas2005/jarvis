@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     contacts_credentials_path: str | None = None
     contacts_token_path: str | None = None
 
+    # Google Drive/Sheets/Docs (SCRUM-61) — credenciais separadas de Gmail/Calendar/
+    # Contacts porque os escopos são bem diferentes (drive.readonly + spreadsheets +
+    # documents) e um token combinado evita 3 telas de consentimento pro usuário.
+    google_workspace_credentials_path: str | None = None
+    google_workspace_token_path: str | None = None
+
     # Orquestrador (SCRUM-17) — substitui o node "JARVIS" do n8n
     llm_provider: str = "anthropic"
     anthropic_api_key: str | None = None

@@ -35,9 +35,18 @@ _TOOL_TO_CAPABILITY = {
     "read_note": "obsidian",
     "write_note": "obsidian",
     "append_note": "obsidian",
+    # Google Drive/Sheets/Docs (SCRUM-61)
+    "search_drive_files": "drive",
+    "read_sheet": "drive",
+    "write_sheet": "drive",
+    "append_sheet_row": "drive",
+    "create_spreadsheet": "drive",
+    "read_doc": "drive",
+    "append_doc": "drive",
+    "create_doc": "drive",
 }
 
-CAPABILITIES = ("email", "calendar", "contacts", "obsidian")
+CAPABILITIES = ("email", "calendar", "contacts", "obsidian", "drive")
 
 
 class StatusTracker:

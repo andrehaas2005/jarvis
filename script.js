@@ -95,7 +95,7 @@ class JARVISInterface {
 
         // Check-in (Email/Calendar/Contacts) + Créditos (ElevenLabs/Anthropic) — painel
         // lateral esquerdo, ver getStatusCheckin()/getStatusCredits() mais abaixo.
-        this.checkinCapabilities = ['email', 'calendar', 'contacts', 'obsidian'];
+        this.checkinCapabilities = ['email', 'calendar', 'contacts', 'obsidian', 'drive'];
         this.creditsValueEleven = document.getElementById('creditsValueEleven');
         this.creditsFillEleven = document.getElementById('creditsFillEleven');
         this.creditsValueAnthropic = document.getElementById('creditsValueAnthropic');
