@@ -31,8 +31,8 @@ function obsidianNodeColor(node) {
 }
 
 const NODE_RADIUS = 3.4;
-const ARROW_LENGTH = 2.2;
-const ARROW_WIDTH = 1.6;
+const ARROW_LENGTH = 2.8;
+const ARROW_WIDTH = 2.1;
 // Velocidade do "fluxo" animado nas linhas (dash marchando do nó de origem pro
 // destino) — pixels de espaço-do-grafo por segundo.
 const DASH_FLOW_SPEED = 6;
@@ -170,6 +170,16 @@ class ObsidianGraphView {
                 e.target.fx += dx;
                 e.target.fy += dy;
             }
+            // "Gravidade": puxão fraco e constante de todo nó de volta pro centro do
+            // grafo (0,0). Sem isso, "ilhas" de nós sem NENHUMA ligação entre si (ex.:
+            // o grupo do futebol vs. o grupo do _index) só sofrem repulsão, sem nada
+            // que as puxe de volta — cada ilha sai voando pra um canto cada vez mais
+            // longe. A gravidade não muda nenhuma ligação, só evita isso.
+            const GRAVITY = 1.0;
+            for (const n of nodes) {
+                n.fx -= n.x * GRAVITY;
+                n.fy -= n.y * GRAVITY;
+            }
             const temp = 10 * (1 - iter / iterations);
             for (const n of nodes) {
                 const disp = Math.sqrt(n.fx * n.fx + n.fy * n.fy) || 0.01;
@@ -265,7 +275,7 @@ class ObsidianGraphView {
 
         // Arestas com seta (direção source -> target) e animação de "fluxo" (dash
         // marchando) — inspirado no grafo nativo do Obsidian.
-        ctx.lineWidth = 0.6 / scale;
+        ctx.lineWidth = 1.5 / scale;
         ctx.setLineDash([1.5 / scale, 1.5 / scale]);
         for (const e of this.edges) {
             const highlighted =
