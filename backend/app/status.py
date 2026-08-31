@@ -18,7 +18,7 @@ import httpx
 from app.config import get_settings
 from app.logging_config import get_logger
 from app.orchestrator.status_tracker import get_status_tracker
-from app.settings_store import get_llm_config
+from app.settings_store import get_llm_config, get_search_config
 
 logger = get_logger("jarvis.status")
 
@@ -104,10 +104,13 @@ async def _get_anthropic_credits() -> dict[str, Any]:
 
 async def get_credits() -> dict[str, Any]:
     # Modelo de IA ativo (SCRUM-23/58) — o usuário pediu pra aparecer aqui direto, sem precisar
-    # abrir a Settings Page pra saber se uma troca foi salva de verdade.
+    # abrir a Settings Page pra saber se uma troca foi salva de verdade. Provedor de busca
+    # (SCRUM-65) segue o mesmo raciocínio.
     llm_config = get_llm_config()
+    search_config = get_search_config()
     return {
         "elevenlabs": await _get_elevenlabs_credits(),
         "anthropic": await _get_anthropic_credits(),
         "llm": {"provider": llm_config["llm_provider"], "model": llm_config["llm_model"]},
+        "search": {"provider": search_config["search_provider"]},
     }

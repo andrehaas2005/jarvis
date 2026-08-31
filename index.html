@@ -178,6 +178,34 @@
                         </p>
                     </section>
 
+                    <!-- Busca na Web (SCRUM-65) — os dois provedores ficam configurados ao mesmo
+                         tempo de propósito: se o preferido falhar numa chamada real (chave
+                         inválida, erro de rede, limite excedido), o backend cai pro outro sozinho
+                         (ver mcp_servers/websearch/server.py), sem precisar trocar nada aqui. -->
+                    <section class="settings-section">
+                        <h3 class="settings-section-title">BUSCA NA WEB</h3>
+                        <p class="settings-section-hint" id="settingsSearchHint">Provedor usado quando o Jarvis precisa pesquisar na internet. Se o preferido falhar, ele tenta o outro sozinho — por isso vale configurar os dois.</p>
+                        <div class="settings-llm-row">
+                            <label class="settings-label">Preferido</label>
+                            <select id="settingsSearchProvider" class="settings-input">
+                                <option value="tavily">Tavily</option>
+                                <option value="brave">Brave Search</option>
+                            </select>
+                        </div>
+                        <div class="settings-llm-row">
+                            <label class="settings-label">Chave Tavily</label>
+                            <input type="password" id="settingsSearchTavilyKey" class="settings-input" placeholder="deixe em branco pra manter a já salva">
+                        </div>
+                        <div class="settings-llm-row">
+                            <label class="settings-label">Chave Brave</label>
+                            <input type="password" id="settingsSearchBraveKey" class="settings-input" placeholder="deixe em branco pra manter a já salva">
+                        </div>
+                        <div class="settings-llm-row">
+                            <button class="settings-btn" id="settingsSearchSave">SALVAR</button>
+                            <span class="settings-llm-status" id="settingsSearchStatus"></span>
+                        </div>
+                    </section>
+
                     <!-- Legal (SCRUM-62) — exigido pelo Google pra publicar a tela de consentimento
                          OAuth em produção: precisa de links públicos pra Termos/Privacidade
                          alcançáveis a partir do site do app. -->
@@ -277,6 +305,14 @@
                     <div class="credits-header">
                         <span class="credits-label">MODELO IA</span>
                         <span class="credits-value" id="creditsValueModel">--</span>
+                    </div>
+                </div>
+                <!-- Provedor de busca na web ativo (SCRUM-65) — mesmo raciocínio do MODELO IA logo
+                     acima: usuário pediu pra ver aqui direto se a troca na Settings Page pegou. -->
+                <div class="credits-item">
+                    <div class="credits-header">
+                        <span class="credits-label">BUSCA</span>
+                        <span class="credits-value" id="creditsValueSearch">--</span>
                     </div>
                 </div>
             </div>
