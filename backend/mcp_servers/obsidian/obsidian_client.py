@@ -186,24 +186,47 @@ class ObsidianClient:
         return matches
 
     def build_graph(self) -> dict[str, Any]:
-        """Monta o grafo do vault inteiro (nós = notas, arestas = wikilinks [[...]] entre
-        elas) — consumido pelo painel de visualização do HUD (GET /obsidian/graph)."""
+        """Monta o grafo do vault inteiro — nós de nota, mais nós "fantasma" pra links
+        [[...]] que apontam pra algo que não é nota nenhuma (ex.: [[Fatos]] citado no
+        _index.md sem existir Fatos.md) e nós de tag, exatamente como o grafo nativo do
+        app Obsidian mostra (referência visual pedida pelo usuário). Consumido pelo
+        painel de visualização do HUD (GET /obsidian/graph)."""
         self.ensure_vault_ok()
         notes = [self._load_note(p) for p in self.list_notes()]
         title_to_path = {n.title: n.path for n in notes}
-        nodes = [
-            {
+
+        nodes: dict[str, dict[str, Any]] = {
+            n.path: {
                 "id": n.path,
                 "title": n.title,
+                "kind": "note",
                 "folder": str(Path(n.path).parent) if Path(n.path).parent != Path(".") else "",
                 "tags": n.tags,
             }
             for n in notes
-        ]
-        edges = []
+        }
+        edges: list[dict[str, str]] = []
+
         for n in notes:
             for linked_title in n.links:
                 target = title_to_path.get(linked_title)
-                if target and target != n.path:
-                    edges.append({"source": n.path, "target": target})
-        return {"nodes": nodes, "edges": edges}
+                if target:
+                    if target != n.path:
+                        edges.append({"source": n.path, "target": target})
+                    continue
+                # Link pra algo que não é nota nenhuma — nó "fantasma" (unresolved),
+                # igual ao Obsidian: aparece no grafo mesmo sem arquivo por trás.
+                ghost_id = f"ghost:{linked_title}"
+                nodes.setdefault(
+                    ghost_id, {"id": ghost_id, "title": linked_title, "kind": "ghost", "folder": "", "tags": []}
+                )
+                edges.append({"source": n.path, "target": ghost_id})
+
+            for tag in n.tags:
+                tag_id = f"tag:{tag}"
+                nodes.setdefault(
+                    tag_id, {"id": tag_id, "title": f"#{tag}", "kind": "tag", "folder": "", "tags": []}
+                )
+                edges.append({"source": n.path, "target": tag_id})
+
+        return {"nodes": list(nodes.values()), "edges": edges}
