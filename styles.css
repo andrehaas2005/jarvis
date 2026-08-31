@@ -1072,9 +1072,16 @@ select.settings-input {
 }
 
 .wake-phrases-popover {
-    position: absolute;
-    top: calc(100% + 10px);
-    left: 0;
+    /* position:fixed (não absolute) de propósito — o pai (.topbar-actions) tem
+       overflow-x:auto pro scroll horizontal em telas estreitas, e isso faz o
+       navegador tratar overflow-y como "auto" também (regra do CSS: os dois eixos
+       não podem ficar em combinações "visible"/não-visible), cortando qualquer
+       descendente position:absolute que vaze pra fora da faixa — o popover abria
+       no DOM (hidden=false) mas nunca aparecia na tela (bug real relatado pelo
+       usuário). Com fixed, a posição é calculada em JS (setupWakePhrasesPopover)
+       a partir do getBoundingClientRect() do wrapper, então escapa do clipping.
+       Ver [[wake-phrases-popover-overflow-clip]] no memory. */
+    position: fixed;
     z-index: 20;
     width: 250px;
     background: #000814;
