@@ -1,9 +1,13 @@
 /**
  * Visualização em grafo do vault Obsidian (SCRUM-63) no painel top-right do HUD —
  * troca de lugar com o radar via um botão de alternância (ver setupObsidianGraph()
- * em script.js). Layout força-dirigida simples (repulsão entre nós + mola nas
- * arestas), calculado uma vez por atualização — sem física contínua, pra não gastar
- * CPU/bateria à toa numa tela que já tem bastante coisa animada.
+ * em script.js). Visual inspirado no grafo nativo do app Obsidian (setas indicando
+ * direção do link + animação de fluxo nas linhas), pedido explícito do usuário.
+ *
+ * Layout força-dirigida simples (repulsão entre nós + mola nas arestas), calculado
+ * uma vez por atualização de dados — a ANIMAÇÃO em si (setas "fluindo" nas linhas,
+ * pulso sutil nos nós) roda à parte, via requestAnimationFrame, só enquanto o painel
+ * está visível (para/começa junto com o toggle radar↔grafo, sem gastar CPU à toa).
  *
  * Cores por pasta, no mesmo espírito da paleta do HUD (--hud-blue/--hud-cyan/etc.).
  */
@@ -16,6 +20,13 @@ const OBSIDIAN_GRAPH_COLORS = {
     '': '#ffffff', // raiz do vault (ex.: _index.md)
 };
 
+const NODE_RADIUS = 3.4;
+const ARROW_LENGTH = 2.2;
+const ARROW_WIDTH = 1.6;
+// Velocidade do "fluxo" animado nas linhas (dash marchando do nó de origem pro
+// destino) — pixels de espaço-do-grafo por segundo.
+const DASH_FLOW_SPEED = 6;
+
 class ObsidianGraphView {
     constructor(canvas, emptyEl, countEl) {
         this.canvas = canvas;
@@ -25,14 +36,16 @@ class ObsidianGraphView {
         this.nodes = [];
         this.edges = [];
         this.hoveredNode = null;
+        this._animFrame = null;
+        this._lastTs = 0;
+        this._dashOffset = 0;
 
         this.canvas.addEventListener('mousemove', (e) => this._onHover(e));
         this.canvas.addEventListener('mouseleave', () => {
             this.hoveredNode = null;
-            this._draw();
         });
 
-        this._resizeObserver = new ResizeObserver(() => this._resizeAndDraw());
+        this._resizeObserver = new ResizeObserver(() => this._resize());
         this._resizeObserver.observe(canvas.parentElement);
     }
 
@@ -41,7 +54,11 @@ class ObsidianGraphView {
         if (this.countEl) this.countEl.textContent = nodes.length ? `(${nodes.length})` : '';
         if (this.emptyEl) this.emptyEl.hidden = nodes.length > 0;
         this.canvas.hidden = nodes.length === 0;
-        if (!nodes.length) return;
+        if (!nodes.length) {
+            this.nodes = [];
+            this.edges = [];
+            return;
+        }
 
         // Posição inicial em círculo — evita que a simulação comece com todo
         // mundo empilhado no centro (converge mais rápido e sem NaN por divisão
@@ -51,8 +68,6 @@ class ObsidianGraphView {
             ...n,
             x: Math.cos(i * angleStep) * 100,
             y: Math.sin(i * angleStep) * 100,
-            vx: 0,
-            vy: 0,
         }));
         const byId = new Map(this.nodes.map((n) => [n.id, n]));
         this.edges = edges
@@ -60,12 +75,12 @@ class ObsidianGraphView {
             .filter((e) => e.source && e.target);
 
         this._simulate();
-        this._resizeAndDraw();
+        this._resize();
     }
 
     // Fruchterman-Reingold simplificado: nós se repelem, arestas puxam como mola.
-    // Poucas iterações (isto não é uma tela de física em tempo real, é só um
-    // layout calculado uma vez por refresh).
+    // Poucas iterações — layout calculado uma vez por refresh, não física em
+    // tempo real (isso fica na animação de linhas, mais barata de rodar sempre).
     _simulate(iterations = 200) {
         const nodes = this.nodes;
         if (!nodes.length) return;
@@ -114,7 +129,7 @@ class ObsidianGraphView {
         }
     }
 
-    _resizeAndDraw() {
+    _resize() {
         const rect = this.canvas.parentElement.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
         this.canvas.width = rect.width * dpr;
@@ -139,16 +154,37 @@ class ObsidianGraphView {
             }
         }
         this.hoveredNode = closestDist < 18 ? closest : null;
-        this._draw();
     }
 
     _toGraphCoords(px, py, rect) {
-        // Inversa da transformação usada em _draw(): origem no centro, escala fixa.
         const scale = this._scale || 1;
         return { x: (px - rect.width / 2) / scale, y: (py - rect.height / 2) / scale };
     }
 
-    _draw() {
+    // Início/parada do loop de animação — chamado de fora (setupObsidianGraph() em
+    // script.js) junto com o toggle radar↔grafo, pra não gastar CPU com o painel
+    // escondido.
+    startAnimation() {
+        if (this._animFrame) return;
+        this._lastTs = performance.now();
+        const loop = (ts) => {
+            const dt = (ts - this._lastTs) / 1000;
+            this._lastTs = ts;
+            this._dashOffset -= DASH_FLOW_SPEED * dt;
+            this._draw(ts / 1000);
+            this._animFrame = requestAnimationFrame(loop);
+        };
+        this._animFrame = requestAnimationFrame(loop);
+    }
+
+    stopAnimation() {
+        if (this._animFrame) {
+            cancelAnimationFrame(this._animFrame);
+            this._animFrame = null;
+        }
+    }
+
+    _draw(t = 0) {
         const ctx = this.ctx;
         const rect = this.canvas.getBoundingClientRect();
         ctx.clearRect(0, 0, rect.width, rect.height);
@@ -158,49 +194,83 @@ class ObsidianGraphView {
         const ys = this.nodes.map((n) => n.y);
         const spanX = Math.max(...xs) - Math.min(...xs) || 1;
         const spanY = Math.max(...ys) - Math.min(...ys) || 1;
-        const scale = Math.min((rect.width - 60) / spanX, (rect.height - 60) / spanY, 6);
+        const scale = Math.min((rect.width - 70) / spanX, (rect.height - 70) / spanY, 6);
         this._scale = scale;
 
         ctx.save();
         ctx.translate(rect.width / 2, rect.height / 2);
         ctx.scale(scale, scale);
 
-        ctx.strokeStyle = 'rgba(0, 212, 255, 0.25)';
-        ctx.lineWidth = 1 / scale;
+        // Arestas com seta (direção source -> target) e animação de "fluxo" (dash
+        // marchando), igual ao pedido — inspirado no grafo nativo do Obsidian.
+        ctx.lineWidth = 0.6 / scale;
+        ctx.setLineDash([1.5 / scale, 1.5 / scale]);
         for (const e of this.edges) {
-            ctx.beginPath();
-            ctx.moveTo(e.source.x, e.source.y);
-            ctx.lineTo(e.target.x, e.target.y);
-            ctx.stroke();
-        }
+            const highlighted =
+                this.hoveredNode && (e.source === this.hoveredNode || e.target === this.hoveredNode);
+            ctx.strokeStyle = highlighted ? 'rgba(0, 212, 255, 0.9)' : 'rgba(0, 212, 255, 0.35)';
+            ctx.lineDashOffset = this._dashOffset;
 
+            const dx = e.target.x - e.source.x;
+            const dy = e.target.y - e.source.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+            const ux = dx / dist;
+            const uy = dy / dist;
+            // Encosta a linha na borda dos círculos, não no centro — e para antes
+            // da ponta da seta, senão a linha "vaza" através da seta.
+            const startX = e.source.x + ux * NODE_RADIUS;
+            const startY = e.source.y + uy * NODE_RADIUS;
+            const endX = e.target.x - ux * (NODE_RADIUS + ARROW_LENGTH);
+            const endY = e.target.y - uy * (NODE_RADIUS + ARROW_LENGTH);
+
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+
+            // Seta (triângulo) apontando pro nó de destino.
+            const tipX = e.target.x - ux * NODE_RADIUS;
+            const tipY = e.target.y - uy * NODE_RADIUS;
+            const perpX = -uy;
+            const perpY = ux;
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(tipX, tipY);
+            ctx.lineTo(endX + perpX * ARROW_WIDTH, endY + perpY * ARROW_WIDTH);
+            ctx.lineTo(endX - perpX * ARROW_WIDTH, endY - perpY * ARROW_WIDTH);
+            ctx.closePath();
+            ctx.fillStyle = highlighted ? 'rgba(0, 212, 255, 0.9)' : 'rgba(0, 212, 255, 0.45)';
+            ctx.fill();
+            ctx.setLineDash([1.5 / scale, 1.5 / scale]);
+        }
+        ctx.setLineDash([]);
+
+        // Nós — pulso sutil (respiração) pra dar vida sem exigir física a cada
+        // frame; o nó em hover fica maior e brilhante.
         for (const n of this.nodes) {
             const color = OBSIDIAN_GRAPH_COLORS[n.folder] || '#00d4ff';
             const isHovered = this.hoveredNode === n;
+            const breathe = 1 + Math.sin(t * 1.6 + (n.x + n.y)) * 0.08;
             ctx.beginPath();
-            ctx.arc(n.x, n.y, isHovered ? 5 / scale : 3.2 / scale, 0, Math.PI * 2);
+            ctx.arc(n.x, n.y, isHovered ? NODE_RADIUS * 1.5 : NODE_RADIUS * breathe, 0, Math.PI * 2);
             ctx.fillStyle = color;
             ctx.shadowColor = color;
-            ctx.shadowBlur = isHovered ? 12 : 4;
+            ctx.shadowBlur = isHovered ? 14 : 5;
             ctx.fill();
         }
-        ctx.restore();
         ctx.shadowBlur = 0;
 
-        if (this.hoveredNode) {
-            const n = this.hoveredNode;
-            const screenX = rect.width / 2 + n.x * scale;
-            const screenY = rect.height / 2 + n.y * scale;
-            ctx.font = '11px Roboto, sans-serif';
-            const label = n.title;
-            const textWidth = ctx.measureText(label).width;
-            ctx.fillStyle = 'rgba(0, 8, 20, 0.9)';
-            ctx.fillRect(screenX + 8, screenY - 10, textWidth + 10, 18);
-            ctx.strokeStyle = 'rgba(0, 212, 255, 0.5)';
-            ctx.strokeRect(screenX + 8, screenY - 10, textWidth + 10, 18);
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText(label, screenX + 13, screenY + 3);
+        // Rótulos sempre visíveis (não só no hover) — igual ao grafo nativo do
+        // Obsidian, que o usuário pediu como referência visual.
+        ctx.font = `${2.6 / scale}px 'Roboto', sans-serif`;
+        ctx.textBaseline = 'middle';
+        for (const n of this.nodes) {
+            const isHovered = this.hoveredNode === n;
+            ctx.fillStyle = isHovered ? '#ffffff' : 'rgba(255, 255, 255, 0.75)';
+            ctx.fillText(n.title, n.x + (NODE_RADIUS + 1.5) / scale, n.y);
         }
+
+        ctx.restore();
     }
 }
 
