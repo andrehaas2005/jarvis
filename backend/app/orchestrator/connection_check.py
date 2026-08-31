@@ -22,6 +22,9 @@ from app.orchestrator.tools import execute_tool
 _PING_CALLS: dict[str, tuple[str, dict[str, Any]]] = {
     "email": ("list_emails", {"max_results": 1}),
     "contacts": ("search_contact", {"name": ""}),
+    # busca vazia com max_results=1 — só confirma que a pasta do vault existe e é
+    # gravável (ObsidianClient.ensure_vault_ok(), chamado antes de qualquer busca).
+    "obsidian": ("search_notes", {"query": "", "max_results": 1}),
 }
 
 
@@ -32,7 +35,7 @@ def _calendar_ping_args() -> dict[str, Any]:
     return {"time_min": now.isoformat(), "time_max": (now + timedelta(days=1)).isoformat(), "max_results": 1}
 
 
-CHECKABLE_SERVICES = ("email", "calendar", "contacts")
+CHECKABLE_SERVICES = ("email", "calendar", "contacts", "obsidian")
 
 
 async def check_service(service: str) -> dict[str, Any]:

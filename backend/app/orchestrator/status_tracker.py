@@ -20,7 +20,7 @@ from typing import Any
 
 MAX_EVENTS_PER_CAPABILITY = 50
 
-# Agrupa as 8 tools em 3 capacidades visíveis no painel (nomes user-facing).
+# Agrupa as tools em capacidades visíveis no painel (nomes user-facing).
 _TOOL_TO_CAPABILITY = {
     "send_email": "email",
     "list_emails": "email",
@@ -30,9 +30,14 @@ _TOOL_TO_CAPABILITY = {
     "get_event": "calendar",
     "search_contact": "contacts",
     "add_or_update_contact": "contacts",
+    # Segundo cérebro (SCRUM-63)
+    "search_notes": "obsidian",
+    "read_note": "obsidian",
+    "write_note": "obsidian",
+    "append_note": "obsidian",
 }
 
-CAPABILITIES = ("email", "calendar", "contacts")
+CAPABILITIES = ("email", "calendar", "contacts", "obsidian")
 
 
 class StatusTracker:

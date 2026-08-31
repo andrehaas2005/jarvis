@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     # Vazio = Sentry desligado (comportamento de hoje, sem mudança se não configurar).
     sentry_dsn: str | None = None
 
+    # Segundo cérebro (SCRUM-63) — pasta do vault Obsidian (arquivos .md locais), sincronizada
+    # entre o Mac do usuário (onde ele edita no app Obsidian) e o VPS via Syncthing (ou
+    # equivalente) — o backend só lê/escreve nessa pasta como filesystem comum, sem depender
+    # do app Obsidian estar aberto. Vazio = tools de memória desligadas (erro claro ao chamar,
+    # não crash no boot).
+    obsidian_vault_path: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

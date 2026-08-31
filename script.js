@@ -95,7 +95,7 @@ class JARVISInterface {
 
         // Check-in (Email/Calendar/Contacts) + Créditos (ElevenLabs/Anthropic) — painel
         // lateral esquerdo, ver getStatusCheckin()/getStatusCredits() mais abaixo.
-        this.checkinCapabilities = ['email', 'calendar', 'contacts'];
+        this.checkinCapabilities = ['email', 'calendar', 'contacts', 'obsidian'];
         this.creditsValueEleven = document.getElementById('creditsValueEleven');
         this.creditsFillEleven = document.getElementById('creditsFillEleven');
         this.creditsValueAnthropic = document.getElementById('creditsValueAnthropic');
@@ -266,6 +266,60 @@ class JARVISInterface {
         this.setupVisionPreviewDrag();
         this.setupSettingsModal();
         this.setupHamburgerMenu();
+        this.setupObsidianGraph();
+    }
+
+    // Grafo do vault Obsidian (SCRUM-63) — painel top-right alterna entre o radar
+    // (decorativo) e a visualização em grafo do "segundo cérebro" do Jarvis.
+    setupObsidianGraph() {
+        this.topRightToggle = document.getElementById('topRightToggle');
+        this.radarView = document.getElementById('radarView');
+        this.obsidianGraphView = document.getElementById('obsidianGraphView');
+        const canvas = document.getElementById('obsidianGraphCanvas');
+        const emptyEl = document.getElementById('obsidianGraphEmpty');
+        const countEl = document.getElementById('obsidianGraphCount');
+        if (!this.topRightToggle || !canvas) return;
+
+        this.obsidianGraph = new ObsidianGraphView(canvas, emptyEl, countEl);
+        this.obsidianGraphShown = false;
+        this.obsidianGraphLoaded = false;
+
+        this.topRightToggle.addEventListener('click', () => {
+            this.obsidianGraphShown = !this.obsidianGraphShown;
+            this.radarView.hidden = this.obsidianGraphShown;
+            this.obsidianGraphView.hidden = !this.obsidianGraphShown;
+            if (this.obsidianGraphShown) {
+                this.loadObsidianGraph();
+                if (!this._obsidianGraphInterval) {
+                    // Atualiza sozinho enquanto o painel estiver visível — reflete notas
+                    // novas que o Jarvis escreveu durante a conversa, sem precisar de F5.
+                    this._obsidianGraphInterval = setInterval(() => {
+                        if (this.obsidianGraphShown) this.loadObsidianGraph();
+                    }, 30000);
+                }
+            }
+        });
+    }
+
+    async loadObsidianGraph() {
+        const token = localStorage.getItem('jarvis-auth-token');
+        try {
+            const response = await fetch(`${JARVIS_BACKEND_URL}/obsidian/graph`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!response.ok) {
+                if (response.status === 503) {
+                    // Vault não configurado ainda — trata como vazio, sem logar como erro.
+                    this.obsidianGraph.setData({ nodes: [], edges: [] });
+                    return;
+                }
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const graph = await response.json();
+            this.obsidianGraph.setData(graph);
+        } catch (error) {
+            console.warn('Não deu pra carregar o grafo do Obsidian:', error.message);
+        }
     }
 
     // Menu hambúrguer: agrupa tudo que antes vivia solto na topbar (voz, música, câmera,
@@ -1411,9 +1465,14 @@ class JARVISInterface {
         btn.disabled = true;
         btn.classList.add('testing');
         try {
+            // Bug real achado testando o item novo (MEMÓRIA/obsidian, SCRUM-63): faltava o
+            // header Authorization aqui — o endpoint exige login (_require_user), então TODO
+            // teste de conexão (email/agenda/contatos, não só o novo) sempre voltava 401 e
+            // mostrava "falhou", mesmo com tudo funcionando de verdade.
+            const token = localStorage.getItem('jarvis-auth-token');
             const response = await fetch(`${JARVIS_BACKEND_URL}/status/connect`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ service: capability }),
             });
             const data = await response.json();

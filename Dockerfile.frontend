@@ -16,6 +16,9 @@ COPY earthhologram.gif radar.gif /usr/share/nginx/html/
 # Chat de texto (SCRUM-26/27/28) — o painel em si vive dentro de index.html
 COPY chat.css chat.js /usr/share/nginx/html/
 
+# Grafo do vault Obsidian (SCRUM-63) — painel top-right, alterna com o radar
+COPY obsidian-graph.js /usr/share/nginx/html/
+
 # Login do HUD (SCRUM-56)
 COPY login.html login.css login.js /usr/share/nginx/html/
 
