@@ -1808,6 +1808,17 @@ class JARVISInterface {
                 dynamicVariables: {
                     daily_briefing: this.getDailyBriefingVariable(),
                 },
+                // Client tool "abrir_chat" (SCRUM-27) — precisa existir uma ferramenta do
+                // tipo Cliente com esse mesmo nome configurada no agente (painel ElevenLabs),
+                // senão o agente nunca vai saber que pode chamar isso. Cobre o caso de pedir
+                // "abre o chat" NO MEIO de uma ligação — o listener de frases de ativação
+                // (JARVISInterface, ver startWakeWordListener) só ouve fora de uma ligação.
+                clientTools: {
+                    abrir_chat: () => {
+                        window.jarvisChat?.open();
+                        return 'Chat aberto na tela do usuário.';
+                    },
+                },
                 onConnect: ({ conversationId }) => {
                     this.conversationStarting = false;
                     this.conversationActive = true;
