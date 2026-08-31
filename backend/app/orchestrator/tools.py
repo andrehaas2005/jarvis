@@ -21,6 +21,7 @@ from app.orchestrator.status_tracker import get_status_tracker
 from mcp_servers.calendar import server as calendar_server
 from mcp_servers.contacts import server as contacts_server
 from mcp_servers.gmail import server as gmail_server
+from mcp_servers.obsidian import server as obsidian_server
 from mcp_servers.websearch import server as websearch_server
 
 # Coordenadas padrão quando o usuário não especifica cidade — mesmo fallback do widget de
@@ -210,6 +211,59 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "search_notes",
+        "description": (
+            "Busca no 'segundo cérebro' do usuário — um vault de notas curadas com fatos, "
+            "preferências, decisões e perfis de pessoas relevantes (não é o histórico da "
+            "conversa, isso você já tem). Use sempre que precisar lembrar de algo pessoal "
+            "sobre o usuário que não foi dito nesta conversa nem nas últimas 24h."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "max_results": {"type": "integer", "default": 10},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "read_note",
+        "description": "Lê o conteúdo completo de uma nota específica do vault de memória pelo caminho (ex.: 'Fatos/comida-favorita').",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "write_note",
+        "description": (
+            "Cria ou sobrescreve uma nota no vault de memória do usuário — use pra registrar "
+            "um fato, preferência ou decisão nova que o usuário compartilhou e que vale a "
+            "pena lembrar permanentemente (ex.: 'Fatos/time-de-futebol.md'). Não use pra "
+            "histórico de conversa comum, só pra memória curada de longo prazo."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "content": {"type": "string"},
+                "tags": {"type": "array", "items": {"type": "string"}, "default": []},
+            },
+            "required": ["path", "content"],
+        },
+    },
+    {
+        "name": "append_note",
+        "description": "Acrescenta conteúdo ao final de uma nota existente do vault de memória, sem apagar o que já estava escrito.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
+            "required": ["path", "content"],
+        },
+    },
+    {
         "name": "check_service_connections",
         "description": (
             "Testa a conexão real com Email, Agenda e Contatos agora (chamada leve e "
@@ -298,6 +352,18 @@ async def _dispatch(name: str, tool_input: dict[str, Any]) -> Any:
         return await websearch_server.web_search(
             query=tool_input["query"], max_results=tool_input.get("max_results", 5)
         )
+    if name == "search_notes":
+        return await obsidian_server.search_notes(
+            query=tool_input["query"], max_results=tool_input.get("max_results", 10)
+        )
+    if name == "read_note":
+        return await obsidian_server.read_note(path=tool_input["path"])
+    if name == "write_note":
+        return await obsidian_server.write_note(
+            path=tool_input["path"], content=tool_input["content"], tags=tool_input.get("tags")
+        )
+    if name == "append_note":
+        return await obsidian_server.append_note(path=tool_input["path"], content=tool_input["content"])
     if name == "check_service_connections":
         # import local pra evitar ciclo (connection_check importa execute_tool daqui)
         from app.orchestrator.connection_check import check_all_connections

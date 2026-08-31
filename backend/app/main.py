@@ -24,6 +24,7 @@ from app.orchestrator.connection_check import check_service
 from app.orchestrator.history_store import init_history_db
 from app.orchestrator.router import handle_query
 from app.presence import get_active_count, heartbeat
+from mcp_servers.obsidian.obsidian_client import ObsidianClient
 from app.settings_store import (
     get_llm_config_public,
     get_search_config_public,
@@ -263,6 +264,21 @@ async def status_connect(
         return await check_service(body.service)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/obsidian/graph")
+async def obsidian_graph(authorization: str | None = Header(default=None)) -> dict:
+    """Grafo do vault Obsidian (SCRUM-63) — nós (notas) e arestas ([[wikilinks]] entre
+    elas), consumido pelo painel de visualização do HUD. Só leitura, qualquer usuário
+    logado pode ver (mesmo padrão de /status/checkin)."""
+    _require_user(authorization)
+    settings = get_settings()
+    if not settings.obsidian_vault_path:
+        raise HTTPException(status_code=503, detail="OBSIDIAN_VAULT_PATH não configurado")
+    try:
+        return ObsidianClient(settings.obsidian_vault_path).build_graph()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/status/presence")

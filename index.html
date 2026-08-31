@@ -302,6 +302,12 @@
                     <span class="checkin-text">CONTATOS</span>
                     <span class="checkin-detail" id="checkinDetail-contacts">sem dados</span>
                 </div>
+                <div class="checkin-item" data-capability="obsidian">
+                    <button class="checkin-test-btn" id="checkinTest-obsidian" title="Testar conexão">⟳</button>
+                    <span class="checkin-dot" id="checkinDot-obsidian"></span>
+                    <span class="checkin-text">MEMÓRIA</span>
+                    <span class="checkin-detail" id="checkinDetail-obsidian">sem dados</span>
+                </div>
             </div>
 
             <!-- Quantas abas/dispositivos têm o HUD aberto agora — heartbeat real, ver
@@ -395,13 +401,23 @@
             </div>
         </div>
 
-        <!-- Top Right - Radar Display -->
+        <!-- Top Right - Radar Display / Grafo do segundo cérebro (SCRUM-63) -->
         <div class="hud-panel top-right">
-            <div class="radar-hologram">
+            <button class="topright-toggle" id="topRightToggle" title="Alternar entre radar e grafo de memória (Obsidian)">GRAFO ⇄</button>
+
+            <div class="radar-hologram" id="radarView">
                 <img src="radar.gif" alt="Radar Display" class="radar-gif">
+                <div class="radar-status">
+                    <div class="status-text">TRACKING SYSTEM STATUS <span class="online">ONLINE</span></div>
+                </div>
             </div>
-            <div class="radar-status">
-                <div class="status-text">TRACKING SYSTEM STATUS <span class="online">ONLINE</span></div>
+
+            <div class="obsidian-graph-view" id="obsidianGraphView" hidden>
+                <canvas id="obsidianGraphCanvas"></canvas>
+                <div class="obsidian-graph-empty" id="obsidianGraphEmpty" hidden>
+                    Vault vazio — ainda não há notas no segundo cérebro do Jarvis.
+                </div>
+                <div class="obsidian-graph-title">SEGUNDO CÉREBRO <span id="obsidianGraphCount"></span></div>
             </div>
         </div>
 
@@ -582,6 +598,7 @@
     <script type="module" src="gestures.js"></script>
 
     <script src="chat.js"></script>
+    <script src="obsidian-graph.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
