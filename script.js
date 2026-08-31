@@ -290,6 +290,7 @@ class JARVISInterface {
             this.obsidianGraphView.hidden = !this.obsidianGraphShown;
             if (this.obsidianGraphShown) {
                 this.loadObsidianGraph();
+                this.obsidianGraph.startAnimation();
                 if (!this._obsidianGraphInterval) {
                     // Atualiza sozinho enquanto o painel estiver visível — reflete notas
                     // novas que o Jarvis escreveu durante a conversa, sem precisar de F5.
@@ -297,6 +298,10 @@ class JARVISInterface {
                         if (this.obsidianGraphShown) this.loadObsidianGraph();
                     }, 30000);
                 }
+            } else {
+                // Para a animação (requestAnimationFrame) com o painel escondido —
+                // sem isso ficaria redesenhando o grafo pra sempre em segundo plano à toa.
+                this.obsidianGraph.stopAnimation();
             }
         });
     }
