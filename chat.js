@@ -180,6 +180,15 @@
             this.panel.hidden = false;
             this.fab.hidden = true;
             this.input.focus();
+            // Bug real relatado em produção: abrir o chat posicionava na PRIMEIRA
+            // mensagem, não na última. Causa: o histórico é carregado uma vez, no
+            // carregamento da página (_initDb -> _loadHistory), com o painel ainda
+            // escondido (hidden) — nesse estado scrollHeight é 0, então o
+            // scrollTop=scrollHeight de _scrollToBottom() não tem efeito nenhum, e a
+            // rolagem nunca é refeita depois que o painel fica visível. requestAnimationFrame
+            // garante que isso roda só depois do navegador aplicar o layout do painel
+            // agora visível (scrollHeight já correto nesse ponto).
+            requestAnimationFrame(() => this._scrollToBottom());
         }
 
         // Só esconde visualmente — a stream SSE continua ligada em segundo plano (ver
