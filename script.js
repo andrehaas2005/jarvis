@@ -1105,17 +1105,38 @@ class JARVISInterface {
             .join('');
     }
 
+    // Posiciona o popover (position:fixed, ver comentário no CSS) colado embaixo do
+    // wrapper do botão ⓘ — recalculado a cada abertura porque a topbar pode ter
+    // rolado horizontalmente (scroll por toque em telas estreitas) desde a última vez.
+    positionWakePhrasesPopover() {
+        if (!this.wakePhrasesPopover || !this.topbarWakeInfo) return;
+        const rect = this.topbarWakeInfo.getBoundingClientRect();
+        this.wakePhrasesPopover.style.top = `${rect.bottom + 10}px`;
+        // Largura fixa (250px, ver CSS) em vez de offsetWidth — o popover ainda está
+        // com hidden=true (display:none) neste ponto, então offsetWidth daria 0.
+        const POPOVER_WIDTH = 250;
+        let left = rect.left;
+        const maxLeft = window.innerWidth - POPOVER_WIDTH - 8;
+        if (left > maxLeft) left = Math.max(8, maxLeft);
+        this.wakePhrasesPopover.style.left = `${left}px`;
+    }
+
     setupWakePhrasesPopover() {
         this.renderWakePhrasesPopover();
         if (!this.topbarWakeInfo || !this.wakePhrasesPopover) return;
         this.topbarWakeInfo.addEventListener('click', (event) => {
             event.stopPropagation();
-            this.wakePhrasesPopover.hidden = !this.wakePhrasesPopover.hidden;
+            const willShow = this.wakePhrasesPopover.hidden;
+            if (willShow) this.positionWakePhrasesPopover();
+            this.wakePhrasesPopover.hidden = !willShow;
         });
         document.addEventListener('click', (event) => {
             if (this.wakePhrasesPopover.hidden) return;
             if (this.wakePhrasesPopover.contains(event.target)) return;
             this.wakePhrasesPopover.hidden = true;
+        });
+        window.addEventListener('resize', () => {
+            if (!this.wakePhrasesPopover.hidden) this.positionWakePhrasesPopover();
         });
     }
 
