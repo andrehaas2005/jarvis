@@ -1,24 +1,34 @@
 /**
- * Visualização em grafo do vault Obsidian (SCRUM-63) no painel top-right do HUD —
- * troca de lugar com o radar via um botão de alternância (ver setupObsidianGraph()
- * em script.js). Visual inspirado no grafo nativo do app Obsidian (setas indicando
- * direção do link + animação de fluxo nas linhas), pedido explícito do usuário.
+ * Visualização em grafo do vault Obsidian (SCRUM-63) — painel compacto no top-right
+ * do HUD (troca de lugar com o radar) + um modo tela cheia (botão ⛶) pra quando
+ * precisar ver de verdade, com zoom (scroll do mouse) e pan (arrastar), igual ao
+ * app Obsidian nativo — pedido explícito do usuário depois de comparar os dois.
  *
- * Layout força-dirigida simples (repulsão entre nós + mola nas arestas), calculado
- * uma vez por atualização de dados — a ANIMAÇÃO em si (setas "fluindo" nas linhas,
- * pulso sutil nos nós) roda à parte, via requestAnimationFrame, só enquanto o painel
- * está visível (para/começa junto com o toggle radar↔grafo, sem gastar CPU à toa).
+ * Nós vêm em 3 tipos (ver obsidian_client.py, build_graph()): nota de verdade, tag
+ * (#algo) e "fantasma" (link [[...]] pra algo que não é nota nenhuma) — mesma
+ * distinção visual que o grafo nativo do Obsidian faz.
  *
- * Cores por pasta, no mesmo espírito da paleta do HUD (--hud-blue/--hud-cyan/etc.).
+ * Uma instância desta classe é usada tanto pro painel pequeno quanto pro overlay
+ * cheio — os dois recebem os mesmos dados (setData), só o canvas de destino muda.
  */
 
 const OBSIDIAN_GRAPH_COLORS = {
-    Fatos: '#00d4ff',
-    Pessoas: '#ff6b35',
-    Projetos: '#00ff88',
-    Diario: '#ffaa00',
-    '': '#ffffff', // raiz do vault (ex.: _index.md)
+    note: {
+        Fatos: '#00d4ff',
+        Pessoas: '#ff6b35',
+        Projetos: '#00ff88',
+        Diario: '#ffaa00',
+        '': '#ffffff', // raiz do vault (ex.: _index.md)
+    },
+    tag: '#c94f4f',
+    ghost: 'rgba(255, 255, 255, 0.35)',
 };
+
+function obsidianNodeColor(node) {
+    if (node.kind === 'tag') return OBSIDIAN_GRAPH_COLORS.tag;
+    if (node.kind === 'ghost') return OBSIDIAN_GRAPH_COLORS.ghost;
+    return OBSIDIAN_GRAPH_COLORS.note[node.folder] || OBSIDIAN_GRAPH_COLORS.note[''];
+}
 
 const NODE_RADIUS = 3.4;
 const ARROW_LENGTH = 2.2;
@@ -39,14 +49,53 @@ class ObsidianGraphView {
         this._animFrame = null;
         this._lastTs = 0;
         this._dashOffset = 0;
+        // Câmera do usuário (pan/zoom) — por cima do auto-fit calculado no layout.
+        // Reseta a cada setData() novo, senão um vault atualizado poderia renderizar
+        // fora da área visível se o usuário tivesse dado zoom antes.
+        this.camera = { panX: 0, panY: 0, zoom: 1 };
+        this._dragging = false;
+        this._dragStart = null;
 
-        this.canvas.addEventListener('mousemove', (e) => this._onHover(e));
-        this.canvas.addEventListener('mouseleave', () => {
-            this.hoveredNode = null;
-        });
-
+        this._setupInteraction();
         this._resizeObserver = new ResizeObserver(() => this._resize());
         this._resizeObserver.observe(canvas.parentElement);
+    }
+
+    _setupInteraction() {
+        const canvas = this.canvas;
+        canvas.addEventListener('mousedown', (e) => {
+            this._dragging = true;
+            this._dragStart = { x: e.clientX, y: e.clientY, panX: this.camera.panX, panY: this.camera.panY };
+            canvas.style.cursor = 'grabbing';
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (this._dragging) {
+                this.camera.panX = this._dragStart.panX + (e.clientX - this._dragStart.x);
+                this.camera.panY = this._dragStart.panY + (e.clientY - this._dragStart.y);
+                return;
+            }
+            this._onHover(e);
+        });
+        window.addEventListener('mouseup', () => {
+            this._dragging = false;
+            canvas.style.cursor = 'grab';
+        });
+        canvas.addEventListener('mouseleave', () => {
+            if (!this._dragging) this.hoveredNode = null;
+        });
+        canvas.addEventListener(
+            'wheel',
+            (e) => {
+                e.preventDefault();
+                const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+                this.camera.zoom = Math.max(0.25, Math.min(8, this.camera.zoom * factor));
+            },
+            { passive: false }
+        );
+        canvas.addEventListener('dblclick', () => {
+            this.camera = { panX: 0, panY: 0, zoom: 1 };
+        });
+        canvas.style.cursor = 'grab';
     }
 
     setData(graph) {
@@ -54,6 +103,7 @@ class ObsidianGraphView {
         if (this.countEl) this.countEl.textContent = nodes.length ? `(${nodes.length})` : '';
         if (this.emptyEl) this.emptyEl.hidden = nodes.length > 0;
         this.canvas.hidden = nodes.length === 0;
+        this.camera = { panX: 0, panY: 0, zoom: 1 };
         if (!nodes.length) {
             this.nodes = [];
             this.edges = [];
@@ -81,10 +131,10 @@ class ObsidianGraphView {
     // Fruchterman-Reingold simplificado: nós se repelem, arestas puxam como mola.
     // Poucas iterações — layout calculado uma vez por refresh, não física em
     // tempo real (isso fica na animação de linhas, mais barata de rodar sempre).
-    _simulate(iterations = 200) {
+    _simulate(iterations = 250) {
         const nodes = this.nodes;
         if (!nodes.length) return;
-        const area = 260 * 260;
+        const area = 280 * 280;
         const k = Math.sqrt(area / nodes.length);
 
         for (let iter = 0; iter < iterations; iter++) {
@@ -143,6 +193,14 @@ class ObsidianGraphView {
     _onHover(event) {
         if (!this.nodes.length) return;
         const rect = this.canvas.getBoundingClientRect();
+        if (
+            event.clientX < rect.left ||
+            event.clientX > rect.right ||
+            event.clientY < rect.top ||
+            event.clientY > rect.bottom
+        ) {
+            return;
+        }
         const { x, y } = this._toGraphCoords(event.clientX - rect.left, event.clientY - rect.top, rect);
         let closest = null;
         let closestDist = Infinity;
@@ -153,17 +211,20 @@ class ObsidianGraphView {
                 closest = n;
             }
         }
-        this.hoveredNode = closestDist < 18 ? closest : null;
+        this.hoveredNode = closestDist < 12 / this.camera.zoom ? closest : null;
     }
 
     _toGraphCoords(px, py, rect) {
-        const scale = this._scale || 1;
-        return { x: (px - rect.width / 2) / scale, y: (py - rect.height / 2) / scale };
+        const effScale = (this._scale || 1) * this.camera.zoom;
+        return {
+            x: (px - rect.width / 2 - this.camera.panX) / effScale,
+            y: (py - rect.height / 2 - this.camera.panY) / effScale,
+        };
     }
 
     // Início/parada do loop de animação — chamado de fora (setupObsidianGraph() em
-    // script.js) junto com o toggle radar↔grafo, pra não gastar CPU com o painel
-    // escondido.
+    // script.js) junto com o toggle radar↔grafo / abrir-fechar o modo tela cheia,
+    // pra não gastar CPU com o painel escondido.
     startAnimation() {
         if (this._animFrame) return;
         this._lastTs = performance.now();
@@ -194,21 +255,22 @@ class ObsidianGraphView {
         const ys = this.nodes.map((n) => n.y);
         const spanX = Math.max(...xs) - Math.min(...xs) || 1;
         const spanY = Math.max(...ys) - Math.min(...ys) || 1;
-        const scale = Math.min((rect.width - 70) / spanX, (rect.height - 70) / spanY, 6);
-        this._scale = scale;
+        const fitScale = Math.min((rect.width - 70) / spanX, (rect.height - 70) / spanY, 6);
+        this._scale = fitScale;
+        const scale = fitScale * this.camera.zoom;
 
         ctx.save();
-        ctx.translate(rect.width / 2, rect.height / 2);
+        ctx.translate(rect.width / 2 + this.camera.panX, rect.height / 2 + this.camera.panY);
         ctx.scale(scale, scale);
 
         // Arestas com seta (direção source -> target) e animação de "fluxo" (dash
-        // marchando), igual ao pedido — inspirado no grafo nativo do Obsidian.
+        // marchando) — inspirado no grafo nativo do Obsidian.
         ctx.lineWidth = 0.6 / scale;
         ctx.setLineDash([1.5 / scale, 1.5 / scale]);
         for (const e of this.edges) {
             const highlighted =
                 this.hoveredNode && (e.source === this.hoveredNode || e.target === this.hoveredNode);
-            ctx.strokeStyle = highlighted ? 'rgba(0, 212, 255, 0.9)' : 'rgba(0, 212, 255, 0.35)';
+            ctx.strokeStyle = highlighted ? 'rgba(0, 212, 255, 0.9)' : 'rgba(0, 212, 255, 0.3)';
             ctx.lineDashOffset = this._dashOffset;
 
             const dx = e.target.x - e.source.x;
@@ -216,8 +278,6 @@ class ObsidianGraphView {
             const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
             const ux = dx / dist;
             const uy = dy / dist;
-            // Encosta a linha na borda dos círculos, não no centro — e para antes
-            // da ponta da seta, senão a linha "vaza" através da seta.
             const startX = e.source.x + ux * NODE_RADIUS;
             const startY = e.source.y + uy * NODE_RADIUS;
             const endX = e.target.x - ux * (NODE_RADIUS + ARROW_LENGTH);
@@ -228,7 +288,6 @@ class ObsidianGraphView {
             ctx.lineTo(endX, endY);
             ctx.stroke();
 
-            // Seta (triângulo) apontando pro nó de destino.
             const tipX = e.target.x - ux * NODE_RADIUS;
             const tipY = e.target.y - uy * NODE_RADIUS;
             const perpX = -uy;
@@ -239,7 +298,7 @@ class ObsidianGraphView {
             ctx.lineTo(endX + perpX * ARROW_WIDTH, endY + perpY * ARROW_WIDTH);
             ctx.lineTo(endX - perpX * ARROW_WIDTH, endY - perpY * ARROW_WIDTH);
             ctx.closePath();
-            ctx.fillStyle = highlighted ? 'rgba(0, 212, 255, 0.9)' : 'rgba(0, 212, 255, 0.45)';
+            ctx.fillStyle = highlighted ? 'rgba(0, 212, 255, 0.9)' : 'rgba(0, 212, 255, 0.4)';
             ctx.fill();
             ctx.setLineDash([1.5 / scale, 1.5 / scale]);
         }
@@ -248,7 +307,7 @@ class ObsidianGraphView {
         // Nós — pulso sutil (respiração) pra dar vida sem exigir física a cada
         // frame; o nó em hover fica maior e brilhante.
         for (const n of this.nodes) {
-            const color = OBSIDIAN_GRAPH_COLORS[n.folder] || '#00d4ff';
+            const color = obsidianNodeColor(n);
             const isHovered = this.hoveredNode === n;
             const breathe = 1 + Math.sin(t * 1.6 + (n.x + n.y)) * 0.08;
             ctx.beginPath();
@@ -260,13 +319,15 @@ class ObsidianGraphView {
         }
         ctx.shadowBlur = 0;
 
-        // Rótulos sempre visíveis (não só no hover) — igual ao grafo nativo do
-        // Obsidian, que o usuário pediu como referência visual.
-        ctx.font = `${2.6 / scale}px 'Roboto', sans-serif`;
+        // Rótulos sempre visíveis (igual ao grafo nativo do Obsidian) — tamanho
+        // definido em unidades de mundo como 11/scale, o que resulta em um tamanho
+        // FIXO na tela (em pixels) independente do zoom — não fica minúsculo nem
+        // gigante conforme o usuário dá zoom in/out.
+        ctx.font = `${11 / scale}px 'Roboto', sans-serif`;
         ctx.textBaseline = 'middle';
         for (const n of this.nodes) {
             const isHovered = this.hoveredNode === n;
-            ctx.fillStyle = isHovered ? '#ffffff' : 'rgba(255, 255, 255, 0.75)';
+            ctx.fillStyle = isHovered ? '#ffffff' : 'rgba(255, 255, 255, 0.8)';
             ctx.fillText(n.title, n.x + (NODE_RADIUS + 1.5) / scale, n.y);
         }
 
@@ -274,6 +335,4 @@ class ObsidianGraphView {
     }
 }
 
-// Instância única, criada sob demanda quando o painel é aberto pela primeira vez
-// (setupObsidianGraph() em script.js) — não custa nada enquanto ninguém troca pro grafo.
 window.ObsidianGraphView = ObsidianGraphView;

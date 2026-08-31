@@ -270,7 +270,10 @@ class JARVISInterface {
     }
 
     // Grafo do vault Obsidian (SCRUM-63) — painel top-right alterna entre o radar
-    // (decorativo) e a visualização em grafo do "segundo cérebro" do Jarvis.
+    // (decorativo) e a visualização em grafo do "segundo cérebro" do Jarvis; um botão
+    // ⛶ abre a mesma visualização em tela cheia, com zoom (scroll) e pan (arrastar) —
+    // o painel pequeno não tem espaço pra isso, pedido do usuário depois de comparar
+    // com o grafo nativo do app Obsidian.
     setupObsidianGraph() {
         this.topRightToggle = document.getElementById('topRightToggle');
         this.radarView = document.getElementById('radarView');
@@ -282,7 +285,7 @@ class JARVISInterface {
 
         this.obsidianGraph = new ObsidianGraphView(canvas, emptyEl, countEl);
         this.obsidianGraphShown = false;
-        this.obsidianGraphLoaded = false;
+        this._obsidianGraphData = null; // último grafo buscado — reaproveitado pro overlay, sem refetch
 
         this.topRightToggle.addEventListener('click', () => {
             this.obsidianGraphShown = !this.obsidianGraphShown;
@@ -304,6 +307,37 @@ class JARVISInterface {
                 this.obsidianGraph.stopAnimation();
             }
         });
+
+        this.setupObsidianGraphOverlay();
+    }
+
+    setupObsidianGraphOverlay() {
+        this.obsidianGraphOverlay = document.getElementById('obsidianGraphOverlay');
+        const expandBtn = document.getElementById('obsidianGraphExpand');
+        const closeBtn = document.getElementById('obsidianGraphOverlayClose');
+        const canvas = document.getElementById('obsidianGraphOverlayCanvas');
+        const emptyEl = document.getElementById('obsidianGraphOverlayEmpty');
+        const countEl = document.getElementById('obsidianGraphOverlayCount');
+        if (!this.obsidianGraphOverlay || !expandBtn || !canvas) return;
+
+        this.obsidianGraphOverlayView = new ObsidianGraphView(canvas, emptyEl, countEl);
+
+        expandBtn.addEventListener('click', () => {
+            this.obsidianGraphOverlay.hidden = false;
+            // Reaproveita o último grafo já buscado pro painel pequeno — sem refetch,
+            // já que os dois mostram exatamente o mesmo vault.
+            if (this._obsidianGraphData) this.obsidianGraphOverlayView.setData(this._obsidianGraphData);
+            this.obsidianGraphOverlayView.startAnimation();
+        });
+
+        const close = () => {
+            this.obsidianGraphOverlay.hidden = true;
+            this.obsidianGraphOverlayView.stopAnimation();
+        };
+        closeBtn.addEventListener('click', close);
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !this.obsidianGraphOverlay.hidden) close();
+        });
     }
 
     async loadObsidianGraph() {
@@ -315,12 +349,14 @@ class JARVISInterface {
             if (!response.ok) {
                 if (response.status === 503) {
                     // Vault não configurado ainda — trata como vazio, sem logar como erro.
-                    this.obsidianGraph.setData({ nodes: [], edges: [] });
+                    this._obsidianGraphData = { nodes: [], edges: [] };
+                    this.obsidianGraph.setData(this._obsidianGraphData);
                     return;
                 }
                 throw new Error(`HTTP ${response.status}`);
             }
             const graph = await response.json();
+            this._obsidianGraphData = graph;
             this.obsidianGraph.setData(graph);
         } catch (error) {
             console.warn('Não deu pra carregar o grafo do Obsidian:', error.message);

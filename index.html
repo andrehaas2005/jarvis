@@ -413,11 +413,29 @@
             </div>
 
             <div class="obsidian-graph-view" id="obsidianGraphView" hidden>
+                <button class="obsidian-graph-expand" id="obsidianGraphExpand" title="Tela cheia (zoom e arrastar com o mouse)">⛶</button>
                 <canvas id="obsidianGraphCanvas"></canvas>
                 <div class="obsidian-graph-empty" id="obsidianGraphEmpty" hidden>
                     Vault vazio — ainda não há notas no segundo cérebro do Jarvis.
                 </div>
                 <div class="obsidian-graph-title">SEGUNDO CÉREBRO <span id="obsidianGraphCount"></span></div>
+            </div>
+        </div>
+
+        <!-- Grafo do vault em tela cheia (SCRUM-63) — mesmo dado do painel pequeno, só
+             que com espaço de verdade pra usar zoom (scroll do mouse) e pan (arrastar) —
+             pedido do usuário depois de comparar com o grafo nativo do app Obsidian. -->
+        <div class="obsidian-graph-overlay" id="obsidianGraphOverlay" hidden>
+            <div class="obsidian-graph-overlay-header">
+                <span class="obsidian-graph-overlay-title">🧠 SEGUNDO CÉREBRO <span id="obsidianGraphOverlayCount"></span></span>
+                <span class="obsidian-graph-overlay-hint">arraste pra mover · scroll pra zoom · duplo clique pra centralizar</span>
+                <button class="obsidian-graph-overlay-close" id="obsidianGraphOverlayClose" title="Fechar">&times;</button>
+            </div>
+            <div class="obsidian-graph-overlay-body">
+                <canvas id="obsidianGraphOverlayCanvas"></canvas>
+                <div class="obsidian-graph-empty" id="obsidianGraphOverlayEmpty" hidden>
+                    Vault vazio — ainda não há notas no segundo cérebro do Jarvis.
+                </div>
             </div>
         </div>
 
