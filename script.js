@@ -2352,8 +2352,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Add some keyboard shortcuts
 document.addEventListener('keydown', (e) => {
-    // Barra de espaço liga/desliga a conversa com o ElevenLabs
-    if (e.code === 'Space' && !e.repeat) {
+    // Barra de espaço liga/desliga a conversa com o ElevenLabs — mas não quando o foco
+    // está num campo de texto (ex.: input do chat, SCRUM-26), senão fica impossível
+    // digitar espaço lá (bug real visto em produção: o espaço "sumia" e ativava a
+    // conversa por voz em vez de ir pro texto).
+    const isTyping = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
+    if (e.code === 'Space' && !e.repeat && !isTyping) {
         e.preventDefault();
         if (window.jarvisInterface) {
             window.jarvisInterface.toggleConversation();
