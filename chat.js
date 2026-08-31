@@ -45,6 +45,15 @@
             // pra filtrar o próprio eco, porque o publish() do backend acontece ANTES da
             // resposta HTTP voltar — o SSE pode chegar antes do fetch() resolver aqui.
             this._ownRequestIds = new Set();
+            // Sessão de EXIBIÇÃO — sempre a mesma, pra sempre (persistida no localStorage),
+            // não muda com ligação de voz ativa/inativa. Diferente da sessão de API (ver
+            // getSessionId()), que pode ser a da ligação de voz em andamento — usada só pra
+            // falar com o backend/assinar o SSE certo. Bug real visto em produção: sem essa
+            // separação, o painel mostrava histórico vazio quando aberto pelo botão depois
+            // de ter sido usado durante uma ligação de voz (sessões diferentes = IndexedDB
+            // diferente). Com isso, o histórico visível é sempre contínuo, não importa por
+            // onde a mensagem entrou.
+            this.displaySessionId = this._getOrCreateTextSessionId();
 
             this._initDb();
             this._bindEvents();
@@ -58,9 +67,7 @@
 
         // ---------------------------------------------------------------- sessão
 
-        getSessionId() {
-            const activeVoiceId = window.jarvisInterface && window.jarvisInterface.activeConversationId;
-            if (activeVoiceId) return activeVoiceId;
+        _getOrCreateTextSessionId() {
             let id = localStorage.getItem(TEXT_SESSION_KEY);
             if (!id) {
                 id = `text-${crypto.randomUUID()}`;
@@ -69,18 +76,26 @@
             return id;
         }
 
-        // Troca a sessão "ativa" (histórico + stream) só se de fato mudou — chamado na
-        // carga da página, ao abrir o painel, e quando uma ligação de voz começa/termina
-        // (ver resubscribe(), chamado por script.js).
+        // Sessão de API/SSE — a da ligação de voz ativa, se houver uma agora; senão, a
+        // sessão de texto persistente. É essa que o backend usa pra decidir o que "lembra"
+        // (SessionMemory por session_id, ver router.py) — diferente de displaySessionId,
+        // que é só sobre o que aparece na tela.
+        getSessionId() {
+            const activeVoiceId = window.jarvisInterface && window.jarvisInterface.activeConversationId;
+            return activeVoiceId || this.displaySessionId;
+        }
+
+        // Troca só a stream/assinatura SSE — o histórico exibido (displaySessionId) nunca
+        // muda. Chamado na carga da página, ao abrir o painel, e quando uma ligação de voz
+        // começa/termina (ver resubscribe(), chamado por script.js).
         _switchSession(sessionId) {
             if (sessionId === this.currentSessionId) return;
             this.currentSessionId = sessionId;
-            this._loadHistory(sessionId);
             this._connectStream(sessionId);
         }
 
         // Chamado por script.js quando uma ligação de voz conecta/desconecta — a sessão
-        // "certa" pra ouvir muda entre a sessão de texto e a da ligação de voz ativa.
+        // de API/SSE "certa" pra ouvir muda entre a sessão de texto e a da ligação ativa.
         resubscribe() {
             this._switchSession(this.getSessionId());
         }
@@ -98,10 +113,7 @@
             };
             request.onsuccess = () => {
                 this.db = request.result;
-                // Se a sessão já foi definida antes do DB terminar de abrir (comum na carga
-                // da página, ver construtor), o primeiro _loadHistory rodou sem histórico —
-                // tenta de novo agora que o DB está pronto de verdade.
-                if (this.currentSessionId) this._loadHistory(this.currentSessionId);
+                this._loadHistory(this.displaySessionId);
             };
             request.onerror = () => {
                 console.warn('[CHAT] Não consegui abrir o IndexedDB — histórico não vai persistir nesta sessão.');
@@ -201,7 +213,7 @@
             this.sendBtn.disabled = true;
 
             this._renderMessage('user', text, 'message', Date.now());
-            this._saveMessage(sessionId, 'user', text);
+            this._saveMessage(this.displaySessionId, 'user', text);
             this._ownRequestIds.add(clientMsgId);
             // Rede de segurança: se o eco do SSE nunca chegar (stream caiu, proxy
             // bufferizando), não queremos vazar memória guardando o id pra sempre.
@@ -220,7 +232,7 @@
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
                 this._renderMessage('assistant', data.reply, 'message', Date.now());
-                this._saveMessage(sessionId, 'assistant', data.reply);
+                this._saveMessage(this.displaySessionId, 'assistant', data.reply);
             } catch (error) {
                 this._ownRequestIds.delete(clientMsgId);
                 this._renderMessage(
@@ -256,7 +268,7 @@
                     // com o MESMO client_msg_id, e os dois precisam ser filtrados.
                     return;
                 }
-                this._saveMessage(sessionId, payload.role, payload.text, payload.kind);
+                this._saveMessage(this.displaySessionId, payload.role, payload.text, payload.kind);
                 // Chegou algo novo por fora (voz, outra aba) — abre sozinho se estiver
                 // fechado, pra não perder um rascunho ou resposta.
                 if (this.panel.hidden) this.open();
