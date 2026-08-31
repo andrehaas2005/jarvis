@@ -21,6 +21,7 @@ from app.orchestrator.status_tracker import get_status_tracker
 from mcp_servers.calendar import server as calendar_server
 from mcp_servers.contacts import server as contacts_server
 from mcp_servers.gmail import server as gmail_server
+from mcp_servers.websearch import server as websearch_server
 
 # Coordenadas padrão quando o usuário não especifica cidade — mesmo fallback do widget de
 # clima no HUD (script.js, loadWeather()), São Paulo.
@@ -192,6 +193,23 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "web_search",
+        "description": (
+            "Busca na internet (Tavily ou Brave, com alternância automática entre eles). Use "
+            "sempre que o pedido depender de informação atual/externa que você não tem certeza "
+            "— notícias, preços, eventos recentes, 'o que é X', 'quem é Y', etc. Nunca invente "
+            "uma resposta que devia vir de uma busca real; chame esta ferramenta."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "max_results": {"type": "integer", "default": 5},
+            },
+            "required": ["query"],
+        },
+    },
+    {
         "name": "check_service_connections",
         "description": (
             "Testa a conexão real com Email, Agenda e Contatos agora (chamada leve e "
@@ -276,6 +294,10 @@ async def _dispatch(name: str, tool_input: dict[str, Any]) -> Any:
         )
     if name == "get_weather":
         return await _get_weather(tool_input.get("city") or None)
+    if name == "web_search":
+        return await websearch_server.web_search(
+            query=tool_input["query"], max_results=tool_input.get("max_results", 5)
+        )
     if name == "check_service_connections":
         # import local pra evitar ciclo (connection_check importa execute_tool daqui)
         from app.orchestrator.connection_check import check_all_connections

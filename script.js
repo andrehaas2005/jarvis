@@ -97,6 +97,7 @@ class JARVISInterface {
         this.creditsFillEleven = document.getElementById('creditsFillEleven');
         this.creditsValueAnthropic = document.getElementById('creditsValueAnthropic');
         this.creditsValueModel = document.getElementById('creditsValueModel');
+        this.creditsValueSearch = document.getElementById('creditsValueSearch');
 
         // Presença — um ID por aba (não por pessoa: sem login, não dá pra saber quem é quem,
         // só quantas abas/dispositivos distintos têm o HUD aberto agora). Persistido em
@@ -133,6 +134,11 @@ class JARVISInterface {
         this.settingsLLMApiKey = document.getElementById('settingsLLMApiKey');
         this.settingsLLMSave = document.getElementById('settingsLLMSave');
         this.settingsLLMStatus = document.getElementById('settingsLLMStatus');
+        this.settingsSearchProvider = document.getElementById('settingsSearchProvider');
+        this.settingsSearchTavilyKey = document.getElementById('settingsSearchTavilyKey');
+        this.settingsSearchBraveKey = document.getElementById('settingsSearchBraveKey');
+        this.settingsSearchSave = document.getElementById('settingsSearchSave');
+        this.settingsSearchStatus = document.getElementById('settingsSearchStatus');
         // Catálogo curado (SCRUM-59): nome + pra-que-serve + preço, pra não depender do usuário
         // digitar o nome exato do modelo à mão (erro real já aconteceu — "qwen3-4b" em vez de
         // "qwen3-4b-instruct"). Preço é referência de ago/2026, pode desatualizar.
@@ -805,6 +811,7 @@ class JARVISInterface {
         if (!this.settingsOverlay) return;
         this.settingsOverlay.hidden = false;
         this.loadLLMSettings();
+        this.loadSearchSettings();
     }
 
     closeSettingsModal() {
@@ -939,6 +946,112 @@ class JARVISInterface {
             }
         } finally {
             this.settingsLLMSave.disabled = false;
+        }
+    }
+
+    // Provedor de busca na web (SCRUM-65) — GET/PUT /settings/search, mesmo padrão de
+    // loadLLMSettings/saveLLMSettings logo acima (dois provedores configurados ao mesmo tempo,
+    // pra alternância automática funcionar do lado do backend).
+    async loadSearchSettings() {
+        if (!this.settingsSearchProvider) return;
+        const token = localStorage.getItem('jarvis-auth-token');
+        let isAdmin = false;
+        try {
+            const user = JSON.parse(localStorage.getItem('jarvis-auth-user') || '{}');
+            isAdmin = user.role === 'admin';
+        } catch (error) {
+            // ignora — trata como não-admin
+        }
+
+        this.settingsSearchProvider.disabled = !isAdmin;
+        if (this.settingsSearchTavilyKey) this.settingsSearchTavilyKey.disabled = !isAdmin;
+        if (this.settingsSearchBraveKey) this.settingsSearchBraveKey.disabled = !isAdmin;
+        if (this.settingsSearchSave) this.settingsSearchSave.disabled = !isAdmin;
+        const hint = document.getElementById('settingsSearchHint');
+        if (hint && !isAdmin) {
+            hint.textContent = 'Só o administrador pode trocar a configuração de busca — você pode ver qual provedor está ativo.';
+        }
+
+        if (this.settingsSearchStatus) this.settingsSearchStatus.textContent = '';
+        try {
+            const response = await fetch(`${JARVIS_BACKEND_URL}/settings/search`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            this.settingsSearchProvider.value = data.search_provider;
+            // As chaves nunca voltam em texto puro (settings_store.get_search_config_public) —
+            // só o booleano. Placeholder avisa se já tem uma salva; campo sempre começa vazio.
+            if (this.settingsSearchTavilyKey) {
+                this.settingsSearchTavilyKey.value = '';
+                this.settingsSearchTavilyKey.placeholder = data.tavily_api_key_set
+                    ? 'já configurada — deixe em branco pra manter'
+                    : 'ex.: chave do Tavily (tavily.com)';
+            }
+            if (this.settingsSearchBraveKey) {
+                this.settingsSearchBraveKey.value = '';
+                this.settingsSearchBraveKey.placeholder = data.brave_api_key_set
+                    ? 'já configurada — deixe em branco pra manter'
+                    : 'ex.: chave do Brave Search (brave.com/search/api)';
+            }
+        } catch (error) {
+            console.warn('Não deu pra carregar a configuração de busca atual:', error.message);
+            if (this.settingsSearchStatus) {
+                this.settingsSearchStatus.textContent = 'Não foi possível carregar';
+                this.settingsSearchStatus.classList.add('error');
+            }
+        }
+
+        if (this.settingsSearchSave && isAdmin) {
+            this.settingsSearchSave.onclick = () => this.saveSearchSettings();
+        }
+    }
+
+    async saveSearchSettings() {
+        const token = localStorage.getItem('jarvis-auth-token');
+        const provider = this.settingsSearchProvider.value;
+        // Vazio = "não mudar a chave já salva" (settings_store.set_search_config) — só manda um
+        // valor de verdade quando o usuário digitou uma chave nova no campo.
+        const tavilyKey = this.settingsSearchTavilyKey?.value.trim() || '';
+        const braveKey = this.settingsSearchBraveKey?.value.trim() || '';
+
+        this.settingsSearchSave.disabled = true;
+        if (this.settingsSearchStatus) {
+            this.settingsSearchStatus.textContent = 'Salvando...';
+            this.settingsSearchStatus.classList.remove('error');
+        }
+        try {
+            const response = await fetch(`${JARVIS_BACKEND_URL}/settings/search`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ provider, tavily_api_key: tavilyKey, brave_api_key: braveKey }),
+            });
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.detail || `HTTP ${response.status}`);
+            }
+            if (this.settingsSearchStatus) this.settingsSearchStatus.textContent = 'Salvo ✓';
+            this.pushLog(`[CONFIG] Busca na web: provedor preferido trocado para ${provider}`);
+            // Limpa os campos depois de salvar — a chave já foi enviada, não precisa continuar
+            // visível na tela (mesmo padrão de qualquer campo de senha).
+            if (this.settingsSearchTavilyKey && tavilyKey) {
+                this.settingsSearchTavilyKey.value = '';
+                this.settingsSearchTavilyKey.placeholder = 'já configurada — deixe em branco pra manter';
+            }
+            if (this.settingsSearchBraveKey && braveKey) {
+                this.settingsSearchBraveKey.value = '';
+                this.settingsSearchBraveKey.placeholder = 'já configurada — deixe em branco pra manter';
+            }
+            // Reflete na hora no painel de créditos (mesmo padrão do MODELO IA), sem esperar o
+            // polling de 5min.
+            this.loadStatusCredits();
+        } catch (error) {
+            if (this.settingsSearchStatus) {
+                this.settingsSearchStatus.textContent = error.message || 'Falha ao salvar';
+                this.settingsSearchStatus.classList.add('error');
+            }
+        } finally {
+            this.settingsSearchSave.disabled = false;
         }
     }
 
@@ -1281,6 +1394,11 @@ class JARVISInterface {
             if (this.creditsValueModel && data.llm) {
                 this.creditsValueModel.textContent = data.llm.model;
                 this.creditsValueModel.title = `Provedor: ${data.llm.provider}`;
+            }
+
+            if (this.creditsValueSearch && data.search) {
+                const searchLabels = { tavily: 'Tavily', brave: 'Brave' };
+                this.creditsValueSearch.textContent = searchLabels[data.search.provider] || data.search.provider;
             }
         } catch (error) {
             console.warn('Falha ao buscar créditos do backend:', error.message);

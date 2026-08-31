@@ -24,7 +24,12 @@ from app.orchestrator.connection_check import check_service
 from app.orchestrator.history_store import init_history_db
 from app.orchestrator.router import handle_query
 from app.presence import get_active_count, heartbeat
-from app.settings_store import get_llm_config_public, set_llm_config
+from app.settings_store import (
+    get_llm_config_public,
+    get_search_config_public,
+    set_llm_config,
+    set_search_config,
+)
 from app.status import get_checkin, get_credits
 
 settings = get_settings()
@@ -185,6 +190,42 @@ async def settings_llm_put(
     try:
         set_llm_config(provider=body.provider, model=body.model, base_url=body.base_url, api_key=body.api_key)
         return get_llm_config_public()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class SearchSettingsRequest(BaseModel):
+    provider: str
+    # Vazio significa "não mudar a já salva" — ver settings_store.set_search_config.
+    tavily_api_key: str = ""
+    brave_api_key: str = ""
+
+
+@app.get("/settings/search")
+async def settings_search_get(authorization: str | None = Header(default=None)) -> dict:
+    """Provedor de busca preferido + quais chaves já estão configuradas
+    (SCRUM-65). Qualquer usuário logado pode ver — só admin pode trocar
+    (ver PUT abaixo). Nunca devolve as chaves em texto puro."""
+    _require_user(authorization)
+    return get_search_config_public()
+
+
+@app.put("/settings/search")
+async def settings_search_put(
+    body: SearchSettingsRequest, authorization: str | None = Header(default=None)
+) -> dict:
+    """Troca o provedor de busca preferido e/ou as chaves do Tavily/Brave
+    (SCRUM-65) — ambos ficam configurados ao mesmo tempo de propósito: se
+    o preferido falhar numa chamada real, `mcp_servers/websearch/server.py`
+    cai pro outro sozinho, sem o usuário precisar fazer nada."""
+    user = _require_user(authorization)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Só admin pode trocar a configuração de busca")
+    try:
+        set_search_config(
+            provider=body.provider, tavily_api_key=body.tavily_api_key, brave_api_key=body.brave_api_key
+        )
+        return get_search_config_public()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
