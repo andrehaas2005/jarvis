@@ -170,20 +170,28 @@ class ObsidianClient:
         return self.write_note(rel_path, content)
 
     def search_notes(self, query: str, max_results: int = 10) -> list[Note]:
-        """Busca simples por substring (case-insensitive) no título, tags e conteúdo —
-        suficiente pro caso de uso pessoal; busca semântica via embeddings fica pra uma
-        fase 2, se algum dia for necessária (ver SCRUM-63)."""
+        """Busca por palavras (case-insensitive) no título, tags e conteúdo — casa
+        qualquer palavra da query, não exige a frase inteira como substring exata
+        (bug real: "time de futebol" não achava a nota que só contém "futebol" e
+        "time" separados, porque a frase completa nunca aparece literal no texto).
+        Ranqueada por quantas palavras da query bateram, mais bate primeiro. Busca
+        semântica via embeddings fica pra uma fase 2, se algum dia for necessária
+        (ver SCRUM-63)."""
         self.ensure_vault_ok()
-        query_lower = query.lower()
-        matches: list[Note] = []
+        query_words = [w for w in re.findall(r"\w+", query.lower()) if w]
+        if not query_words:
+            return []
+
+        scored: list[tuple[int, Note]] = []
         for rel_path in self.list_notes():
             note = self._load_note(rel_path)
             haystack = f"{note.title} {' '.join(note.tags)} {note.content}".lower()
-            if query_lower in haystack:
-                matches.append(note)
-            if len(matches) >= max_results:
-                break
-        return matches
+            score = sum(1 for w in query_words if w in haystack)
+            if score > 0:
+                scored.append((score, note))
+
+        scored.sort(key=lambda pair: pair[0], reverse=True)
+        return [note for _, note in scored[:max_results]]
 
     def build_graph(self) -> dict[str, Any]:
         """Monta o grafo do vault inteiro — nós de nota, mais nós "fantasma" pra links
