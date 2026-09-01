@@ -21,7 +21,12 @@ logger = get_logger("jarvis.orchestrator.providers")
 # (tool_name, tool_input) -> resultado (serializado como string antes de voltar pro LLM)
 ToolExecutor = Callable[[str, dict[str, Any]], Awaitable[str]]
 
-MAX_TOOL_ITERATIONS = 6
+MAX_TOOL_ITERATIONS = 12
+# Era 6 — estourava em produção em pedidos combinados de 3 serviços (SCRUM-61:
+# achar planilha no Drive + ler aba + buscar email + comparar + corrigir/lançar
+# lançamento) que sozinhos já passam de 6 chamadas de ferramenta sequenciais.
+# Achado real: "orquestrador: excedeu 6 iterações" no Sentry pedindo exatamente
+# esse fluxo (verificar cobrança no email x planilha de orçamento).
 
 
 class RateLimitedError(Exception):
