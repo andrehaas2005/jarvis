@@ -71,7 +71,16 @@ async def read_sheet(spreadsheet: str, cell_range: str = "") -> dict:
 async def write_sheet(spreadsheet: str, cell_range: str, values: list[list[Any]]) -> dict:
     """Escreve/sobrescreve valores num intervalo de uma planilha (ex.: 'Página1!A2:D2').
     `values` é uma lista de linhas, cada linha uma lista de valores das colunas.
-    `spreadsheet` aceita nome ou ID."""
+    `spreadsheet` aceita nome ou ID.
+
+    IMPORTANTE: `cell_range` precisa começar com o nome REAL da aba — NUNCA
+    chute 'Sheet1'/'Planilha1' (nem todo Google Sheets usa esse nome padrão;
+    é comum ser 'Página1', ou um nome customizado como 'Transações'). Se
+    você ainda não sabe o nome da aba desta planilha nesta conversa, chame
+    `read_sheet` primeiro (o retorno traz `sheet_names` com os nomes reais)
+    — só então monte o `cell_range`. Achado real em produção: 8 tentativas
+    seguidas com 'Planilha1' e 'Sheet1' falharam (HTTP 400 'Unable to parse
+    range') antes de acertar."""
     client = _get_client()
     return await asyncio.to_thread(client.write_sheet, spreadsheet, cell_range, values)
 
@@ -80,14 +89,31 @@ async def write_sheet(spreadsheet: str, cell_range: str, values: list[list[Any]]
 async def append_sheet_row(spreadsheet: str, sheet_name: str, values: list[Any]) -> dict:
     """Acrescenta UMA linha nova ao final de uma aba da planilha (não sobrescreve
     nada existente) — use pra 'lançar' um item novo (ex.: uma conta de cobrança).
-    `values` é a lista de valores das colunas, na ordem. `spreadsheet` aceita nome ou ID."""
+    `values` é a lista de valores das colunas, na ordem. `spreadsheet` aceita nome ou ID.
+
+    IMPORTANTE: `sheet_name` precisa ser o nome REAL da aba — NUNCA chute
+    'Sheet1'/'Planilha1'. Se ainda não souber o nome desta planilha nesta
+    conversa, chame `read_sheet` primeiro (retorna `sheet_names`) antes de
+    chamar esta ferramenta."""
     client = _get_client()
     return await asyncio.to_thread(client.append_sheet_row, spreadsheet, sheet_name, values)
 
 
 @mcp.tool()
 async def create_spreadsheet(title: str) -> dict:
-    """Cria uma planilha nova e vazia no Google Sheets com o título dado."""
+    """Cria uma planilha NOVA e vazia no Google Sheets com o título dado.
+
+    SÓ use esta ferramenta quando o usuário pedir explicitamente pra criar
+    uma planilha nova. Se o usuário se referir a "minha planilha" ou citar
+    um nome de planilha que já deveria existir (orçamento, controle, etc.),
+    use `search_drive_files`/`read_sheet`/`write_sheet`/`append_sheet_row`
+    nela — NUNCA crie uma planilha nova como substituto por não ter achado
+    a certa ou por uma chamada anterior ter falhado. Achado real em
+    produção: o usuário pediu pra lançar uma conta 'na minha planilha'
+    (referindo-se a uma planilha existente que estava com ela aberta na
+    tela) e esta ferramenta foi usada pra criar uma planilha nova e
+    diferente — os dados foram parar num arquivo que o usuário não estava
+    vendo, e ele achou que nada tinha sido salvo."""
     client = _get_client()
     return await asyncio.to_thread(client.create_spreadsheet, title)
 
