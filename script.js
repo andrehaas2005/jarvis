@@ -2215,12 +2215,6 @@ class JARVISInterface {
                 },
                 onAgentToolRequest: ({ tool_name }) => {
                     this.pushLog(`[FERRAMENTA] Chamando ${tool_name}...`);
-                    // Navegador interno (SCRUM-69): quando o Jarvis usa uma tool browser_*,
-                    // o painel se abre sozinho mostrando o que ele está navegando — o usuário
-                    // não precisa saber que existe um botão pra abrir manualmente.
-                    if (tool_name && tool_name.startsWith('browser_') && window.jarvisBrowserPanel) {
-                        window.jarvisBrowserPanel.onAgentBrowserToolUse();
-                    }
                 },
                 onAgentToolResponse: (payload) => {
                     const nome = payload.tool_name || 'ferramenta';
@@ -2236,6 +2230,15 @@ class JARVISInterface {
                         this.addSourcesFromToolResult(payload.full_tool_result);
                         this.updateOutputBuffer(nome, payload.full_tool_result);
                     }
+                    // Navegador interno (SCRUM-69): 'jarvis_backend' é um wrapper — a decisão
+                    // de abrir uma aba (browser_open) acontece escondida dentro dele, o SDK de
+                    // voz nunca expõe esse nome de ferramenta interna. Em vez de adivinhar pelo
+                    // nome do evento (não dava certo — achado real em produção: a aba abria de
+                    // verdade no servidor e o painel nunca aparecia), força uma checagem
+                    // imediata do estado real das abas assim que qualquer resposta chega — o
+                    // vigia contínuo do painel (browser-panel.js) já pegaria isso em até alguns
+                    // segundos sozinho, isso só deixa mais rápido.
+                    window.jarvisBrowserPanel?.checkNow();
                 },
                 onModeChange: ({ mode }) => {
                     this.currentMode = mode;
