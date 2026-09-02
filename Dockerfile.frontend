@@ -19,6 +19,9 @@ COPY chat.css chat.js /usr/share/nginx/html/
 # Grafo do vault Obsidian (SCRUM-63) — painel top-right, alterna com o radar
 COPY obsidian-graph.js /usr/share/nginx/html/
 
+# Navegador interno (SCRUM-69) — painel flutuante com abas e favoritos
+COPY browser-panel.js /usr/share/nginx/html/
+
 # Login do HUD (SCRUM-56)
 COPY login.html login.css login.js /usr/share/nginx/html/
 
