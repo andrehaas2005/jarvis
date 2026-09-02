@@ -2125,6 +2125,21 @@ class JARVISInterface {
                         window.jarvisChat?.open();
                         return 'Chat aberto na tela do usuário.';
                     },
+                    fechar_chat: () => {
+                        window.jarvisChat?.close();
+                        return 'Chat fechado.';
+                    },
+                    // Navegador interno (SCRUM-69) — mesmo padrão do abrir/fechar_chat:
+                    // precisa existir uma ferramenta tipo Cliente com esse nome no agente
+                    // (painel ElevenLabs), senão ele nunca sabe que pode chamar isso.
+                    abrir_navegador: () => {
+                        window.jarvisBrowserPanel?.open();
+                        return 'Navegador aberto na tela do usuário.';
+                    },
+                    fechar_navegador: () => {
+                        window.jarvisBrowserPanel?.close();
+                        return 'Navegador fechado.';
+                    },
                 },
                 onConnect: ({ conversationId }) => {
                     this.conversationStarting = false;
