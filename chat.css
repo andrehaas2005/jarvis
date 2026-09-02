@@ -139,6 +139,22 @@
     object-fit: cover;
 }
 
+/* Mais de uma imagem na mesma mensagem — miniaturas menores lado a lado em vez de
+   uma só grande (SCRUM-69). */
+.jarvis-chat-msg-thumbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.jarvis-chat-msg-thumbs .jarvis-chat-msg-thumb {
+    width: 72px;
+    height: 72px;
+    max-width: 72px;
+    margin-bottom: 0;
+}
+
 .jarvis-chat-msg-time {
     display: block;
     margin-top: 4px;
@@ -146,34 +162,46 @@
     opacity: 0.5;
 }
 
-.jarvis-chat-attachment-preview {
+.jarvis-chat-attachments-preview {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     padding: 8px 12px;
     border-top: 1px solid var(--hud-grid);
     flex-shrink: 0;
 }
 
-.jarvis-chat-attachment-preview[hidden] {
+.jarvis-chat-attachments-preview[hidden] {
     display: none;
 }
 
-.jarvis-chat-attachment-thumb {
-    width: 32px;
-    height: 32px;
-    object-fit: cover;
-    border-radius: 4px;
+.jarvis-chat-attachment-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 160px;
+    padding: 3px 8px 3px 3px;
+    border-radius: 14px;
+    background: var(--hud-gray);
     border: 1px solid var(--hud-grid);
 }
 
+.jarvis-chat-attachment-thumb {
+    width: 24px;
+    height: 24px;
+    object-fit: cover;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
 .jarvis-chat-attachment-icon {
-    font-size: 1.1rem;
+    font-size: 1rem;
+    flex-shrink: 0;
 }
 
 .jarvis-chat-attachment-name {
-    flex: 1;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: var(--hud-text-dim);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -185,8 +213,10 @@
     border: none;
     color: var(--hud-text-dim);
     cursor: pointer;
-    font-size: 1rem;
+    font-size: 0.95rem;
+    line-height: 1;
     flex-shrink: 0;
+    padding: 0;
 }
 
 .jarvis-chat-attachment-remove:hover {

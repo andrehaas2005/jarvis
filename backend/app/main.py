@@ -530,47 +530,60 @@ _CHAT_UPLOAD_ALLOWED_TYPES = {
     "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf",
 }
 _CHAT_UPLOAD_MAX_BYTES = 15 * 1024 * 1024  # 15MB — folga generosa sobre uma foto de recibo
+# Várias fotos de uma vez (ex.: um comprovante longo em 2-3 fotos, ou vários recibos
+# pra comparar) — limite baixo de propósito, cada imagem já pesa no payload da API.
+_CHAT_UPLOAD_MAX_FILES = 5
 
 
 @app.post("/chat/upload")
 async def chat_upload(
-    file: UploadFile = File(...),
+    files: list[UploadFile] = File(...),
     message: str = Form(""),
     session_id: str = Form(...),
     client_msg_id: str = Form(""),
     authorization: str | None = Header(default=None),
 ) -> dict:
-    """Envio de imagem/PDF no chat (SCRUM-69, Fase 1) — mesmo orquestrador
-    de `/chat/message`, só que a mensagem do usuário carrega um anexo que o
-    Claude enxerga de verdade (visão nativa, sem OCR/LLM separado). Ex. de
-    uso real: enviar foto de um comprovante de compra e pedir análise —
-    depois, numa mensagem de texto seguinte, pedir pra lançar na planilha
-    (a análise já fica no histórico da conversa, não precisa reenviar a
-    imagem)."""
+    """Envio de imagem(ns)/PDF no chat (SCRUM-69, Fase 1) — mesmo orquestrador
+    de `/chat/message`, só que a mensagem do usuário carrega um ou mais
+    anexos que o Claude enxerga de verdade (visão nativa, sem OCR/LLM
+    separado). Ex. de uso real: enviar foto(s) de um comprovante de compra e
+    pedir análise — depois, numa mensagem de texto seguinte, pedir pra
+    lançar na planilha (a análise já fica no histórico da conversa, não
+    precisa reenviar a imagem)."""
     _require_user(authorization)
     if not session_id.strip():
         raise HTTPException(status_code=400, detail="campo 'session_id' obrigatório")
-    if file.content_type not in _CHAT_UPLOAD_ALLOWED_TYPES:
+    if not files:
+        raise HTTPException(status_code=400, detail="nenhum arquivo enviado")
+    if len(files) > _CHAT_UPLOAD_MAX_FILES:
         raise HTTPException(
-            status_code=415,
-            detail=f"Tipo de arquivo não suportado ({file.content_type}). Aceito: imagem (jpg/png/gif/webp) ou PDF.",
+            status_code=413, detail=f"No máximo {_CHAT_UPLOAD_MAX_FILES} arquivos por mensagem."
         )
-    raw = await file.read()
-    if len(raw) > _CHAT_UPLOAD_MAX_BYTES:
-        raise HTTPException(status_code=413, detail="Arquivo grande demais (máx. 15MB).")
 
     import base64
 
-    attachment = {"media_type": file.content_type, "data": base64.b64encode(raw).decode("ascii")}
+    attachments: list[dict[str, str]] = []
+    names: list[str] = []
+    for file in files:
+        if file.content_type not in _CHAT_UPLOAD_ALLOWED_TYPES:
+            raise HTTPException(
+                status_code=415,
+                detail=f"Tipo de arquivo não suportado ({file.content_type}). Aceito: imagem (jpg/png/gif/webp) ou PDF.",
+            )
+        raw = await file.read()
+        if len(raw) > _CHAT_UPLOAD_MAX_BYTES:
+            raise HTTPException(status_code=413, detail=f"'{file.filename}' grande demais (máx. 15MB).")
+        attachments.append({"media_type": file.content_type, "data": base64.b64encode(raw).decode("ascii")})
+        names.append(file.filename or file.content_type)
 
     try:
-        answer = await handle_query(message, session_id, attachments=[attachment])
+        answer = await handle_query(message, session_id, attachments=attachments)
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    # SSE só ecoa o texto (legenda) — mandar a imagem inteira pelo stream pras outras
+    # SSE só ecoa o texto (legenda) — mandar as imagens inteiras pelo stream pras outras
     # abas é peso desnecessário pro caso de uso real (uma aba só, na prática).
-    caption = message or f"[enviou um arquivo: {file.filename or file.content_type}]"
+    caption = message or f"[enviou {len(names)} arquivo(s): {', '.join(names)}]"
     publish(session_id, role="user", text=caption, client_msg_id=client_msg_id)
     publish(session_id, role="assistant", text=answer, client_msg_id=client_msg_id)
 

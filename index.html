@@ -630,17 +630,13 @@
             </div>
         </div>
         <div class="jarvis-chat-messages" id="jarvisChatMessages"></div>
-        <!-- Anexo pendente (SCRUM-69, Fase 1) — miniatura + nome do arquivo escolhido,
-             some antes de enviar; some/limpa depois do envio ou se o usuário cancelar. -->
-        <div class="jarvis-chat-attachment-preview" id="jarvisChatAttachmentPreview" hidden>
-            <img class="jarvis-chat-attachment-thumb" id="jarvisChatAttachmentThumb" alt="" hidden>
-            <span class="jarvis-chat-attachment-icon" id="jarvisChatAttachmentIcon" hidden>&#128196;</span>
-            <span class="jarvis-chat-attachment-name" id="jarvisChatAttachmentName"></span>
-            <button class="jarvis-chat-attachment-remove" id="jarvisChatAttachmentRemove" title="Remover anexo">&times;</button>
-        </div>
-        <input type="file" id="jarvisChatFileInput" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf" hidden>
+        <!-- Anexos pendentes (SCRUM-69) — uma "pill" por arquivo escolhido (miniatura/ícone +
+             nome + remover), populado por JS (0 a N). Some antes de enviar; volta se o envio
+             falhar (ver _send() em chat.js). -->
+        <div class="jarvis-chat-attachments-preview" id="jarvisChatAttachmentsPreview" hidden></div>
+        <input type="file" id="jarvisChatFileInput" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf" multiple hidden>
         <div class="jarvis-chat-input-row">
-            <button class="jarvis-chat-attach" id="jarvisChatAttachPhoto" title="Anexar foto/imagem">&#128247;</button>
+            <button class="jarvis-chat-attach" id="jarvisChatAttachPhoto" title="Anexar foto(s)/imagem(ns) — pode escolher várias de uma vez">&#128247;</button>
             <button class="jarvis-chat-attach" id="jarvisChatAttachFile" title="Anexar arquivo (PDF)">&#128206;</button>
             <textarea class="jarvis-chat-input" id="jarvisChatInput" placeholder="Escreva para o Jarvis..." rows="1"></textarea>
             <button class="jarvis-chat-send" id="jarvisChatSend" title="Enviar">&#10148;</button>
