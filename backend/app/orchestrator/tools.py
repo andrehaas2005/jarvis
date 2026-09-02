@@ -201,7 +201,10 @@ TOOLS: list[dict[str, Any]] = [
             "Busca na internet (Tavily ou Brave, com alternância automática entre eles). Use "
             "sempre que o pedido depender de informação atual/externa que você não tem certeza "
             "— notícias, preços, eventos recentes, 'o que é X', 'quem é Y', etc. Nunca invente "
-            "uma resposta que devia vir de uma busca real; chame esta ferramenta."
+            "uma resposta que devia vir de uma busca real; chame esta ferramenta. Ao citar um "
+            "resultado pro usuário, pergunte se ele quer que você abra o link de verdade — você "
+            "TEM esse poder via `browser_open` (navegador interno, painel do HUD), nunca diga "
+            "que só pode dar o link."
         ),
         "input_schema": {
             "type": "object",
