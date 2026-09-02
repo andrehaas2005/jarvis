@@ -14,6 +14,7 @@
         : 'https://jarvis-api.andre.haas.nom.br';
 
     const POLL_MS = 1500;
+    const WATCH_MS = 3000;
 
     class JarvisBrowserPanel {
         constructor() {
@@ -40,7 +41,64 @@
             this.favorites = [];
             this.pollTimer = null;
 
+            // Abas que o painel já "viu" (mostrou o painel ou o usuário já sabe que
+            // existem) — usado pelo vigia global abaixo pra só abrir o painel sozinho
+            // quando surge uma aba REALMENTE nova, nunca de novo pra uma que já foi
+            // vista (ex.: o usuário fechou o painel de propósito).
+            this.knownTabIds = new Set();
+            this.watchTimer = null;
+
             this._setupEventListeners();
+            this._startGlobalWatcher();
+        }
+
+        /** Vigia contínuo (roda sempre, painel aberto ou não) que detecta quando o
+         * Jarvis abre uma aba por conta própria — via voz ou chat — e mostra o
+         * painel sozinho pro usuário. Existe porque, no fluxo de voz, o SDK da
+         * ElevenLabs só expõe o nome da ferramenta externa 'jarvis_backend' (o
+         * wrapper) — a decisão de chamar `browser_open` acontece escondida DENTRO
+         * do backend, então não dá pra saber "abriu uma aba" só escutando o evento
+         * de tool-call da voz (achado real em produção: a aba abria de verdade no
+         * servidor, mas o painel nunca aparecia, porque esse gatilho por nome de
+         * ferramenta nunca disparava). Observar o estado real (`GET /browser/tabs`)
+         * em vez de adivinhar por nome de evento funciona pra voz E pra chat, sem
+         * precisar que o backend avise de volta. */
+        async _startGlobalWatcher() {
+            try {
+                const data = await this._api('/browser/tabs');
+                (data.tabs || []).forEach((t) => this.knownTabIds.add(t.tab_id));
+            } catch (error) {
+                // sem sessão/login ainda — tenta de novo no próximo tick
+            }
+            this.watchTimer = setInterval(() => this._checkForNewTabs(), WATCH_MS);
+        }
+
+        async _checkForNewTabs() {
+            let data;
+            try {
+                data = await this._api('/browser/tabs');
+            } catch (error) {
+                return;
+            }
+            const tabs = data.tabs || [];
+            const newTabs = tabs.filter((t) => !this.knownTabIds.has(t.tab_id));
+            tabs.forEach((t) => this.knownTabIds.add(t.tab_id));
+
+            if (newTabs.length) {
+                this.tabs = tabs;
+                const wasHidden = this.panel.hidden;
+                if (wasHidden) {
+                    this.activeTabId = newTabs[newTabs.length - 1].tab_id;
+                    this.open();
+                } else {
+                    this._renderTabs();
+                }
+            } else if (!this.panel.hidden) {
+                // painel já aberto: mantém a tira de abas atualizada (título/URL podem
+                // ter mudado) sem interromper o que o usuário está olhando.
+                this.tabs = tabs;
+                this._renderTabs();
+            }
         }
 
         _authHeaders() {
@@ -319,14 +377,11 @@
             }
         }
 
-        /** Chamado de fora (script.js) quando o Jarvis (voz/chat) usa uma tool
-         * `browser_*` — abre o painel sozinho e mostra o que ele está navegando,
-         * sem o usuário precisar clicar em nada. */
-        onAgentBrowserToolUse() {
-            if (this.panel.hidden) this.open();
-            else {
-                this._loadTabs();
-            }
+        /** Chamado de fora (script.js) depois de qualquer resposta do Jarvis — força
+         * o vigia contínuo a checar agora em vez de esperar o próximo tick, pra
+         * abrir o painel mais rápido quando ele acabou de navegar. */
+        checkNow() {
+            this._checkForNewTabs();
         }
 
         _setupEventListeners() {
