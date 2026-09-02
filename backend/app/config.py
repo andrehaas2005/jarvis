@@ -63,6 +63,17 @@ class Settings(BaseSettings):
     # não crash no boot).
     obsidian_vault_path: str | None = None
 
+    # Navegador interno (SCRUM-69) — painel flutuante no HUD com abas e favoritos,
+    # via Chromium headless (Playwright) compartilhado entre as abas. Limites
+    # conservadores de propósito: o VPS é 2 vCPUs já rodando ~12 outros serviços
+    # (achado real: ~72% de memória em uso antes desta feature existir) — poucas
+    # abas simultâneas e timeout de ociosidade curto evitam que isso derrube o
+    # resto. Vazio = tool de favoritos desligada (erro claro ao chamar, não
+    # crash no boot) — mas browser_open funciona sem isso configurado.
+    browser_bookmarks_path: str | None = None
+    browser_max_tabs: int = 3
+    browser_idle_timeout_seconds: int = 600
+
 
 @lru_cache
 def get_settings() -> Settings:

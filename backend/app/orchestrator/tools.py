@@ -21,6 +21,7 @@ from app.orchestrator.status_tracker import get_status_tracker
 from mcp_servers.calendar import server as calendar_server
 from mcp_servers.contacts import server as contacts_server
 from mcp_servers.gmail import server as gmail_server
+from mcp_servers.browser import server as browser_server
 from mcp_servers.google_workspace import server as google_workspace_server
 from mcp_servers.obsidian import server as obsidian_server
 from mcp_servers.websearch import server as websearch_server
@@ -345,6 +346,96 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "browser_open",
+        "description": (
+            "Abre `url` no navegador interno (painel flutuante no HUD do usuário) — use "
+            "quando ele pedir pra abrir/navegar/consultar um site de verdade (diferente "
+            "de `web_search`, que só traz snippets de busca, sem abrir nada visualmente). "
+            "Sem `tab_id`, abre numa aba NOVA; passe o `tab_id` de uma aba já aberta pra "
+            "navegar nela em vez de abrir outra (ex.: usuário disse 'nessa mesma aba'). "
+            "Retorna `tab_id`/`title`/`url` — o HUD mostra a página sozinho, você não "
+            "recebe a imagem aqui; se for descrever o conteúdo pro usuário, confira o "
+            "título/URL retornados, não invente o que a página mostra."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"url": {"type": "string"}, "tab_id": {"type": "string", "default": ""}},
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "browser_scroll",
+        "description": "Rola a página numa aba aberta do navegador interno. `direction`: 'up' ou 'down'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tab_id": {"type": "string"},
+                "direction": {"type": "string", "default": "down"},
+                "amount": {"type": "integer", "default": 700},
+            },
+            "required": ["tab_id"],
+        },
+    },
+    {
+        "name": "browser_click",
+        "description": "Clica na posição (x, y) em pixels de uma aba do navegador interno (mesmas coordenadas do que o HUD mostra) — use pra navegar clicando em links/botões da página.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"tab_id": {"type": "string"}, "x": {"type": "number"}, "y": {"type": "number"}},
+            "required": ["tab_id", "x", "y"],
+        },
+    },
+    {
+        "name": "browser_type",
+        "description": "Digita texto no elemento focado de uma aba do navegador interno (ex.: depois de clicar num campo de busca). `press_enter=true` pra submeter.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tab_id": {"type": "string"},
+                "text": {"type": "string"},
+                "press_enter": {"type": "boolean", "default": False},
+            },
+            "required": ["tab_id", "text"],
+        },
+    },
+    {
+        "name": "browser_close_tab",
+        "description": "Fecha uma aba do navegador interno.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"tab_id": {"type": "string"}},
+            "required": ["tab_id"],
+        },
+    },
+    {
+        "name": "browser_list_tabs",
+        "description": "Lista as abas abertas agora no navegador interno (id/título/URL).",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "browser_bookmark_add",
+        "description": "Salva um favorito (título + URL) no navegador interno, pra voltar depois rapidamente. Diferente de guardar como conhecimento permanente — se a página ensinar algo que vale lembrar de verdade, prefira (também) registrar com `write_note`/`append_note` no segundo cérebro.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"title": {"type": "string"}, "url": {"type": "string"}},
+            "required": ["title", "url"],
+        },
+    },
+    {
+        "name": "browser_bookmark_list",
+        "description": "Lista os favoritos salvos no navegador interno, mais recente primeiro.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "browser_bookmark_remove",
+        "description": "Remove um favorito do navegador interno pelo `bookmark_id`.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"bookmark_id": {"type": "string"}},
+            "required": ["bookmark_id"],
+        },
+    },
+    {
         "name": "check_service_connections",
         "description": (
             "Testa a conexão real com Email, Agenda e Contatos agora (chamada leve e "
@@ -475,6 +566,32 @@ async def _dispatch(name: str, tool_input: dict[str, Any]) -> Any:
         return await google_workspace_server.create_doc(
             title=tool_input["title"], content=tool_input.get("content", "")
         )
+    if name == "browser_open":
+        return await browser_server.browser_open(url=tool_input["url"], tab_id=tool_input.get("tab_id", ""))
+    if name == "browser_scroll":
+        return await browser_server.browser_scroll(
+            tab_id=tool_input["tab_id"],
+            direction=tool_input.get("direction", "down"),
+            amount=tool_input.get("amount", 700),
+        )
+    if name == "browser_click":
+        return await browser_server.browser_click(tab_id=tool_input["tab_id"], x=tool_input["x"], y=tool_input["y"])
+    if name == "browser_type":
+        return await browser_server.browser_type(
+            tab_id=tool_input["tab_id"],
+            text=tool_input["text"],
+            press_enter=tool_input.get("press_enter", False),
+        )
+    if name == "browser_close_tab":
+        return await browser_server.browser_close_tab(tab_id=tool_input["tab_id"])
+    if name == "browser_list_tabs":
+        return await browser_server.browser_list_tabs()
+    if name == "browser_bookmark_add":
+        return await browser_server.browser_bookmark_add(title=tool_input["title"], url=tool_input["url"])
+    if name == "browser_bookmark_list":
+        return await browser_server.browser_bookmark_list()
+    if name == "browser_bookmark_remove":
+        return await browser_server.browser_bookmark_remove(bookmark_id=tool_input["bookmark_id"])
     if name == "check_service_connections":
         # import local pra evitar ciclo (connection_check importa execute_tool daqui)
         from app.orchestrator.connection_check import check_all_connections

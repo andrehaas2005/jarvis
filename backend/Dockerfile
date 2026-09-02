@@ -6,6 +6,13 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Chromium headless pro navegador interno (SCRUM-69) — `--with-deps` instala também as
+# libs de sistema (fontconfig, libnss etc.) que o Chromium precisa pra rodar; sem isso
+# ele crasha no primeiro browser_open com erro de shared library faltando. Camada
+# separada da instalação pip de propósito: raramente muda, fica cacheada mesmo quando
+# requirements.txt muda por outro motivo.
+RUN playwright install --with-deps chromium
+
 # Copia o código da aplicação
 COPY app/ ./app/
 COPY mcp_servers/ ./mcp_servers/

@@ -44,9 +44,19 @@ _TOOL_TO_CAPABILITY = {
     "read_doc": "drive",
     "append_doc": "drive",
     "create_doc": "drive",
+    # Navegador interno (SCRUM-69)
+    "browser_open": "browser",
+    "browser_scroll": "browser",
+    "browser_click": "browser",
+    "browser_type": "browser",
+    "browser_close_tab": "browser",
+    "browser_list_tabs": "browser",
+    "browser_bookmark_add": "browser",
+    "browser_bookmark_list": "browser",
+    "browser_bookmark_remove": "browser",
 }
 
-CAPABILITIES = ("email", "calendar", "contacts", "obsidian", "drive")
+CAPABILITIES = ("email", "calendar", "contacts", "obsidian", "drive", "browser")
 
 
 class StatusTracker:

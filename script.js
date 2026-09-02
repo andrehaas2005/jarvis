@@ -95,7 +95,7 @@ class JARVISInterface {
 
         // Check-in (Email/Calendar/Contacts) + Créditos (ElevenLabs/Anthropic) — painel
         // lateral esquerdo, ver getStatusCheckin()/getStatusCredits() mais abaixo.
-        this.checkinCapabilities = ['email', 'calendar', 'contacts', 'obsidian', 'drive'];
+        this.checkinCapabilities = ['email', 'calendar', 'contacts', 'obsidian', 'drive', 'browser'];
         this.creditsValueEleven = document.getElementById('creditsValueEleven');
         this.creditsFillEleven = document.getElementById('creditsFillEleven');
         this.creditsValueAnthropic = document.getElementById('creditsValueAnthropic');
@@ -2215,6 +2215,12 @@ class JARVISInterface {
                 },
                 onAgentToolRequest: ({ tool_name }) => {
                     this.pushLog(`[FERRAMENTA] Chamando ${tool_name}...`);
+                    // Navegador interno (SCRUM-69): quando o Jarvis usa uma tool browser_*,
+                    // o painel se abre sozinho mostrando o que ele está navegando — o usuário
+                    // não precisa saber que existe um botão pra abrir manualmente.
+                    if (tool_name && tool_name.startsWith('browser_') && window.jarvisBrowserPanel) {
+                        window.jarvisBrowserPanel.onAgentBrowserToolUse();
+                    }
                 },
                 onAgentToolResponse: (payload) => {
                     const nome = payload.tool_name || 'ferramenta';

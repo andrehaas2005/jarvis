@@ -102,6 +102,9 @@
                 <button class="hamburger-item topbar-chat" id="topbarChat" title="Chat de texto com o Jarvis (ou diga 'Jarvis, abrir chat')">
                     <span class="topbar-chat-icon">&#128172;</span> CHAT
                 </button>
+                <button class="hamburger-item topbar-browser" id="topbarBrowser" title="Navegador interno do Jarvis (abas, favoritos)">
+                    <span class="topbar-browser-icon">&#127760;</span> NAVEGADOR
+                </button>
                 <button class="hamburger-item topbar-settings" id="topbarSettings" title="Configurações (ou diga 'Jarvis, abrir configurações')">
                     <span class="hamburger-item-icon">&#9881;</span> CONFIGURAÇÕES
                 </button>
@@ -314,6 +317,15 @@
                     <span class="checkin-text">DRIVE</span>
                     <span class="checkin-detail" id="checkinDetail-drive">sem dados</span>
                 </div>
+                <!-- Sem botão de teste (⟳): "testar" abriria um Chromium headless de
+                     verdade (custo real de memória no VPS) só pra confirmar conexão —
+                     status passivo (atualiza quando o navegador interno é de fato usado)
+                     em vez de check-in ativo, ver connection_check.py (SCRUM-69). -->
+                <div class="checkin-item" data-capability="browser">
+                    <span class="checkin-dot" id="checkinDot-browser"></span>
+                    <span class="checkin-text">NAVEGADOR</span>
+                    <span class="checkin-detail" id="checkinDetail-browser">sem dados</span>
+                </div>
             </div>
 
             <!-- Quantas abas/dispositivos têm o HUD aberto agora — heartbeat real, ver
@@ -442,6 +454,38 @@
                 <div class="obsidian-graph-empty" id="obsidianGraphOverlayEmpty" hidden>
                     Vault vazio — ainda não há notas no segundo cérebro do Jarvis.
                 </div>
+            </div>
+        </div>
+
+        <!-- Navegador interno (SCRUM-69) — painel flutuante com abas + favoritos, controlado
+             tanto pelo próprio Jarvis (tools browser_*) quanto direto pelo usuário aqui (digitar
+             URL, clicar na página, favoritar). Screenshot real via Chromium headless no backend
+             — não é um <iframe> (a maioria dos sites bloqueia embed via X-Frame-Options/CSP, e
+             embutir a página de verdade abriria a porta pra JS de terceiros rodar dentro do HUD). -->
+        <div class="browser-panel" id="browserPanel" hidden>
+            <div class="browser-panel-header">
+                <div class="browser-tabs-strip" id="browserTabsStrip"></div>
+                <button class="browser-tab-new" id="browserTabNew" title="Nova aba">+</button>
+                <button class="browser-panel-close" id="browserPanelClose" title="Fechar">&times;</button>
+            </div>
+            <div class="browser-address-row">
+                <input type="text" class="browser-address-input" id="browserAddressInput" placeholder="Digite uma URL e aperte Enter...">
+                <button class="browser-favorite-star" id="browserFavoriteStar" title="Favoritar esta página">&#9734;</button>
+                <button class="browser-favorites-toggle" id="browserFavoritesToggle" title="Ver favoritos">&#9733; FAVORITOS</button>
+            </div>
+            <div class="browser-panel-body">
+                <div class="browser-viewport" id="browserViewport">
+                    <img class="browser-screenshot" id="browserScreenshot" alt="">
+                    <div class="browser-empty" id="browserEmpty">Nenhuma aba aberta — digite uma URL acima, escolha um favorito, ou peça pro Jarvis abrir um site.</div>
+                </div>
+                <div class="browser-favorites-panel" id="browserFavoritesPanel" hidden>
+                    <div class="browser-favorites-header">FAVORITOS</div>
+                    <div class="browser-favorites-list" id="browserFavoritesList"></div>
+                </div>
+            </div>
+            <div class="browser-typebar">
+                <input type="text" class="browser-type-input" id="browserTypeInput" placeholder="Digitar na página (clique num campo nela antes)...">
+                <button class="browser-type-send" id="browserTypeSend" title="Enviar">&#10148;</button>
             </div>
         </div>
 
@@ -623,6 +667,7 @@
 
     <script src="chat.js"></script>
     <script src="obsidian-graph.js"></script>
+    <script src="browser-panel.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
