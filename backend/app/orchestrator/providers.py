@@ -38,6 +38,15 @@ class RateLimitedError(Exception):
     testes manuais consumirem o teto por minuto)."""
 
 
+class LLMBadRequestError(Exception):
+    """A Anthropic recusou a requisição em si (400) — payload inválido pro
+    caso de uso do usuário, não um bug de servidor. Achado real em produção
+    (SCRUM-69, chat com imagem): foto de celular em resolução alta virava
+    ~12.5MB em base64, passando do limite de 10MB da API por imagem —
+    virava 500 cru sem explicação nenhuma pro usuário ('ele não conseguiu
+    ver'). `main.py` traduz isso numa mensagem clara em vez de 500 genérico."""
+
+
 class LLMProvider(ABC):
     """Contrato mínimo que todo provedor de LLM do orquestrador implementa."""
 
@@ -89,6 +98,8 @@ class AnthropicProvider(LLMProvider):
                 )
             except anthropic.RateLimitError as exc:
                 raise RateLimitedError(str(exc)) from exc
+            except anthropic.BadRequestError as exc:
+                raise LLMBadRequestError(str(exc)) from exc
             messages.append({"role": "assistant", "content": response.content})
 
             if response.stop_reason != "tool_use":

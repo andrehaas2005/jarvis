@@ -20,7 +20,7 @@ from app.config import get_settings
 from app.logging_config import get_logger
 from app.orchestrator.history_store import get_recent_summary, log_turn
 from app.orchestrator.memory import get_session_memory
-from app.orchestrator.providers import RateLimitedError, get_provider
+from app.orchestrator.providers import LLMBadRequestError, RateLimitedError, get_provider
 from app.orchestrator.tools import TOOLS, execute_tool
 from app.settings_store import get_llm_config
 
@@ -157,6 +157,25 @@ async def handle_query(query: str, session_id: str, attachments: list[dict[str, 
         return (
             "Desculpa, Senhor — atingi o limite de uso do modelo agora. "
             "Pode tentar de novo em alguns segundos?"
+        )
+    except LLMBadRequestError as exc:
+        # Achado real em produção (SCRUM-69): foto de celular em resolução alta
+        # (~12.5MB em base64) passa do limite de 10MB por imagem da API — sem
+        # isso virava 500 cru, sem o usuário entender que a imagem nem chegou a
+        # ser analisada. Resposta natural em vez de erro técnico; não persiste
+        # na memória (a troca não aconteceu de verdade).
+        logger.warning(
+            "orchestrator_bad_request",
+            extra={"extra_fields": {"session_id": session_id, "error": str(exc)}},
+        )
+        if attachments and "image" in str(exc).lower() and "MB" in str(exc):
+            return (
+                "Essa imagem é grande demais pra eu processar (o limite é 10MB depois de "
+                "convertida) — tenta mandar de novo, se der numa resolução um pouco menor?"
+            )
+        return (
+            "Desculpa, Senhor — não consegui processar isso (a API recusou o pedido). "
+            "Pode tentar de novo?"
         )
 
     memory.set(session_id, updated_messages)
