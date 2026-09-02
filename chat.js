@@ -33,10 +33,17 @@
             this.fab = document.getElementById('jarvisChatFab');
             this.attachPhotoBtn = document.getElementById('jarvisChatAttachPhoto');
             this.attachFileBtn = document.getElementById('jarvisChatAttachFile');
+            this.fileInput = document.getElementById('jarvisChatFileInput');
+            this.attachmentPreview = document.getElementById('jarvisChatAttachmentPreview');
+            this.attachmentThumb = document.getElementById('jarvisChatAttachmentThumb');
+            this.attachmentIcon = document.getElementById('jarvisChatAttachmentIcon');
+            this.attachmentName = document.getElementById('jarvisChatAttachmentName');
+            this.attachmentRemoveBtn = document.getElementById('jarvisChatAttachmentRemove');
             this.topbarBtn = document.getElementById('topbarChat');
 
             if (!this.panel) return; // login.html/terms.html etc. não têm o painel
 
+            this.pendingAttachment = null;
             this.db = null;
             this.eventSource = null;
             this.currentSessionId = null;
@@ -121,7 +128,7 @@
             };
         }
 
-        _saveMessage(sessionId, role, text, kind) {
+        _saveMessage(sessionId, role, text, kind, attachmentThumb) {
             if (!this.db) return;
             const tx = this.db.transaction(STORE_NAME, 'readwrite');
             tx.objectStore(STORE_NAME).add({
@@ -130,6 +137,9 @@
                 text,
                 kind: kind || 'message',
                 ts: Date.now(),
+                // Miniatura JÁ REDUZIDA (ver _makeThumbnail) — nunca a imagem em
+                // resolução cheia, pra não inchar o IndexedDB local (SCRUM-69/Fase 1).
+                attachment_thumb: attachmentThumb || null,
             });
         }
 
@@ -142,17 +152,25 @@
             request.onsuccess = () => {
                 const rows = request.result || [];
                 rows.sort((a, b) => a.ts - b.ts);
-                rows.forEach((row) => this._renderMessage(row.role, row.text, row.kind, row.ts));
+                rows.forEach((row) => this._renderMessage(row.role, row.text, row.kind, row.ts, row.attachment_thumb));
                 this._scrollToBottom();
             };
         }
 
         // ---------------------------------------------------------------- render
 
-        _renderMessage(role, text, kind, ts) {
+        _renderMessage(role, text, kind, ts, attachmentThumb) {
             const bubble = document.createElement('div');
             bubble.className = `jarvis-chat-msg ${role}`;
             if (kind && kind !== 'message') bubble.dataset.kind = kind;
+
+            if (attachmentThumb) {
+                const img = document.createElement('img');
+                img.className = 'jarvis-chat-msg-thumb';
+                img.src = attachmentThumb;
+                img.alt = 'Anexo enviado';
+                bubble.appendChild(img);
+            }
 
             const body = document.createElement('div');
             body.textContent = text;
@@ -229,15 +247,18 @@
 
         async _send() {
             const text = this.input.value.trim();
-            if (!text) return;
+            const attachment = this.pendingAttachment;
+            if (!text && !attachment) return;
             const sessionId = this.getSessionId();
             const clientMsgId = crypto.randomUUID();
             this.input.value = '';
             this._autoGrow();
             this.sendBtn.disabled = true;
 
-            this._renderMessage('user', text, 'message', Date.now());
-            this._saveMessage(this.displaySessionId, 'user', text);
+            const displayText = text || `[enviou ${attachment.file.name}]`;
+            this._renderMessage('user', displayText, 'message', Date.now(), attachment?.thumbDataUrl);
+            this._saveMessage(this.displaySessionId, 'user', displayText, 'message', attachment?.thumbDataUrl);
+            this._clearAttachment();
             this._ownRequestIds.add(clientMsgId);
             // Rede de segurança: se o eco do SSE nunca chegar (stream caiu, proxy
             // bufferizando), não queremos vazar memória guardando o id pra sempre.
@@ -245,15 +266,35 @@
 
             const token = localStorage.getItem('jarvis-auth-token');
             try {
-                const response = await fetch(`${CHAT_BACKEND_URL}/chat/message`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({ message: text, session_id: sessionId, client_msg_id: clientMsgId }),
-                });
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                let response;
+                if (attachment) {
+                    // Envia o ARQUIVO EM RESOLUÇÃO CHEIA (a miniatura acima é só pra exibir
+                    // localmente/economizar espaço no IndexedDB — o Claude precisa da imagem
+                    // de verdade pra analisar direito, ex.: ler valores de um comprovante).
+                    const formData = new FormData();
+                    formData.append('file', attachment.file);
+                    formData.append('message', text);
+                    formData.append('session_id', sessionId);
+                    formData.append('client_msg_id', clientMsgId);
+                    response = await fetch(`${CHAT_BACKEND_URL}/chat/upload`, {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${token}` },
+                        body: formData,
+                    });
+                } else {
+                    response = await fetch(`${CHAT_BACKEND_URL}/chat/message`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({ message: text, session_id: sessionId, client_msg_id: clientMsgId }),
+                    });
+                }
+                if (!response.ok) {
+                    const errBody = await response.json().catch(() => ({}));
+                    throw new Error(errBody.detail || `HTTP ${response.status}`);
+                }
                 const data = await response.json();
                 this._renderMessage('assistant', data.reply, 'message', Date.now());
                 this._saveMessage(this.displaySessionId, 'assistant', data.reply);
@@ -268,6 +309,70 @@
             } finally {
                 this.sendBtn.disabled = false;
             }
+        }
+
+        // ----------------------------------------------------- anexo (SCRUM-69, Fase 1)
+
+        async _onFileSelected() {
+            const file = this.fileInput.files?.[0];
+            this.fileInput.value = ''; // permite escolher o mesmo arquivo de novo depois
+            if (!file) return;
+            const MAX_BYTES = 15 * 1024 * 1024;
+            if (file.size > MAX_BYTES) {
+                this._renderMessage(
+                    'assistant',
+                    '⚠️ Esse arquivo é grande demais (máx. 15MB). Tenta um menor?',
+                    'message',
+                    Date.now()
+                );
+                return;
+            }
+            const isImage = file.type.startsWith('image/');
+            const thumbDataUrl = isImage ? await this._makeThumbnail(file) : null;
+            this.pendingAttachment = { file, thumbDataUrl };
+
+            this.attachmentPreview.hidden = false;
+            this.attachmentName.textContent = file.name;
+            if (thumbDataUrl) {
+                this.attachmentThumb.src = thumbDataUrl;
+                this.attachmentThumb.hidden = false;
+                this.attachmentIcon.hidden = true;
+            } else {
+                this.attachmentThumb.hidden = true;
+                this.attachmentIcon.hidden = false;
+            }
+        }
+
+        // Miniatura reduzida (canvas, máx. 200px, JPEG 60%) pra exibir/guardar local —
+        // o arquivo original em resolução cheia é o que vai pro backend/Claude.
+        _makeThumbnail(file, maxDim = 200) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.round(img.width * scale);
+                        canvas.height = Math.round(img.height * scale);
+                        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.6));
+                    };
+                    img.onerror = () => resolve(null);
+                    img.src = reader.result;
+                };
+                reader.onerror = () => resolve(null);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        _clearAttachment() {
+            this.pendingAttachment = null;
+            this.attachmentPreview.hidden = true;
+            this.attachmentThumb.src = '';
+            this.attachmentThumb.hidden = true;
+            this.attachmentIcon.hidden = true;
+            this.attachmentName.textContent = '';
         }
 
         // ----------------------------------------------------------------- SSE
@@ -365,18 +470,20 @@
                 }
             });
 
-            // Anexos ainda não processam nada de verdade (SCRUM-26 v1, escopo combinado
-            // com o usuário) — só a UI, o resto é feature futura.
-            const attachStub = () => {
-                this._renderMessage(
-                    'assistant',
-                    'Envio de arquivos ainda não está pronto — isso é uma feature futura.',
-                    'message',
-                    Date.now()
-                );
-            };
-            this.attachPhotoBtn?.addEventListener('click', attachStub);
-            this.attachFileBtn?.addEventListener('click', attachStub);
+            // Envio de imagem/PDF (SCRUM-69, Fase 1) — mesmo <input type="file"> pros dois
+            // botões, só troca o "accept" antes de abrir o seletor.
+            this.attachPhotoBtn?.addEventListener('click', () => {
+                if (!this.fileInput) return;
+                this.fileInput.accept = 'image/jpeg,image/png,image/gif,image/webp';
+                this.fileInput.click();
+            });
+            this.attachFileBtn?.addEventListener('click', () => {
+                if (!this.fileInput) return;
+                this.fileInput.accept = 'application/pdf';
+                this.fileInput.click();
+            });
+            this.fileInput?.addEventListener('change', () => this._onFileSelected());
+            this.attachmentRemoveBtn?.addEventListener('click', () => this._clearAttachment());
         }
     }
 

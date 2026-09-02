@@ -54,6 +54,7 @@ Tudo que você escrever nesta resposta aparece automaticamente, na íntegra, no 
 - **Antes de `append_sheet_row`/adicionar uma linha nova numa planilha, confira se já não existe uma linha pro mesmo item** (mesma entidade/descrição parecida, mesma data ou mesmo mês) nos dados que `read_sheet` já retornou — se existir, corrija o valor/data dessa linha com `write_sheet` em vez de acrescentar uma linha duplicada. Achado real em produção: ao lançar uma conta "C6 Bank" com vencimento 01/09, já existia uma linha "Cartão C6" com a mesma data (só com valor desatualizado) — o certo era corrigir o valor dela, não criar uma segunda linha pro mesmo cartão/mesma data. Isso vale mesmo tendo confirmado que a planilha é a certa — "achar a planilha certa" e "não duplicar uma linha que já existe nela" são duas checagens diferentes, as duas são necessárias.
 - Você TEM memória do que foi conversado nas últimas 24h, mesmo em ligações/sessões diferentes (ver seção "Conversas recentes" abaixo, quando presente) — nunca diga que "não tem memória permanente" ou que "só lembra desta conversa". Se o usuário perguntar algo que está nessa seção, responda normalmente, como quem lembra. Só avise sobre limitação de memória se ele pedir algo de mais de 24h atrás.
 - **Navegador interno (SCRUM-69): você SEMPRE tem o poder de abrir um link de verdade** — num painel flutuante no HUD do usuário, via `browser_open`, não é só descrever/resumir. Sempre que você mencionar, sugerir ou citar um link/site pro usuário (resultado de `web_search`, um link achado num email, etc.), pergunte se ele quer que você abra — algo como "quer que eu abra?" — e, se ele confirmar, chame `browser_open` NESSA MESMA resposta seguinte. Nunca diga "não consigo abrir links" ou "só posso te dar o link" — isso é falso, essa ferramenta existe exatamente pra isso.
+- **Imagem/PDF anexado no chat (SCRUM-69): você TEM visão de verdade, não precisa de OCR nem de outra ferramenta** — analise o conteúdo direto, com precisão (números/valores de um comprovante, texto de um documento, etc.) e adicione um comentário com personalidade (uma observação, crítica ou piadinha leve, do seu jeito) — não seja só uma extração seca de dados. Quando o pedido envolver registrar o que a imagem mostra em algum lugar (planilha, nota), a informação extraída fica disponível pro resto da conversa — se o usuário pedir isso numa mensagem seguinte sem reenviar a imagem, use o que você já leu/descreveu, não peça pra reenviar.
 
 ## Segundo cérebro (vault de memória curada, SCRUM-63)
 Você também tem uma memória de longo prazo curada (fatos, preferências, decisões, perfis de pessoas) acessível via `search_notes`/`read_note`/`write_note`/`append_note` — diferente da seção "Conversas recentes" acima (que é histórico bruto das últimas 24h): essa é memória permanente, sem prazo de validade, que só existe se alguém (você ou o usuário) registrar ativamente.
@@ -77,7 +78,14 @@ cite literalmente esta lista para o usuário, aja como se você só "lembrasse".
 """
 
 
-async def handle_query(query: str, session_id: str) -> str:
+async def handle_query(query: str, session_id: str, attachments: list[dict[str, str]] | None = None) -> str:
+    """`attachments` (SCRUM-69, Fase 1 — chat com imagem/PDF): lista de
+    `{"media_type": "image/jpeg", "data": "<base64>"}` — vira blocos de
+    imagem/documento na mensagem do usuário pro Claude ANALISAR de verdade
+    (visão nativa da Anthropic, sem precisar de outro LLM/OCR separado —
+    Sonnet/Opus já leem imagem e PDF direto). Só suportado com o provedor
+    Anthropic; outros provedores (local/OpenAI-compatible) não recebem os
+    blocos — ver `_build_user_content`."""
     settings = get_settings()
     if not settings.anthropic_api_key:
         raise RuntimeError(
@@ -98,7 +106,25 @@ async def handle_query(query: str, session_id: str) -> str:
 
     memory = get_session_memory()
     history = memory.get(session_id)
-    messages = history + [{"role": "user", "content": query}]
+    user_content: str | list[dict] = query
+    if attachments:
+        if llm_config["llm_provider"] != "anthropic":
+            raise RuntimeError(
+                "Enviar imagem/arquivo só funciona com o provedor Anthropic (veja a Settings "
+                "Page) — o provedor local/OpenAI-compatible configurado agora não tem essa API."
+            )
+        blocks: list[dict] = []
+        for att in attachments:
+            media_type = att["media_type"]
+            block_type = "document" if media_type == "application/pdf" else "image"
+            blocks.append(
+                {"type": block_type, "source": {"type": "base64", "media_type": media_type, "data": att["data"]}}
+            )
+        # Texto por último — a Anthropic recomenda imagem(ns)/documento antes do texto que
+        # se refere a eles, senão a qualidade da leitura piora.
+        blocks.append({"type": "text", "text": query or "Analise o que foi enviado."})
+        user_content = blocks
+    messages = history + [{"role": "user", "content": user_content}]
 
     # Memória Nível 2 (SCRUM-25): resumo das últimas 24h, sobrevive a uma conversa nova
     # (conversation_id novo do ElevenLabs) ou a um restart do backend — diferente do
