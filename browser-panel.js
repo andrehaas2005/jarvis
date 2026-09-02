@@ -86,12 +86,15 @@
 
             if (newTabs.length) {
                 this.tabs = tabs;
-                const wasHidden = this.panel.hidden;
-                if (wasHidden) {
-                    this.activeTabId = newTabs[newTabs.length - 1].tab_id;
+                // Toda aba nova vira a ativa, mesmo com o painel já aberto mostrando
+                // outra coisa — pedido do usuário: a aba que o Jarvis acabou de abrir é
+                // sempre a que importa ver agora.
+                this.activeTabId = newTabs[newTabs.length - 1].tab_id;
+                if (this.panel.hidden) {
                     this.open();
                 } else {
                     this._renderTabs();
+                    this._loadScreenshot();
                 }
             } else if (!this.panel.hidden) {
                 // painel já aberto: mantém a tira de abas atualizada (título/URL podem
