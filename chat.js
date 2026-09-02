@@ -58,6 +58,7 @@
             this._initDb();
             this._bindEvents();
             this._restoreWidth();
+            this._publishWidthVar();
             // Conecta ao SSE já na carga da página, independente do painel estar aberto —
             // sem isso, "abre sozinho quando tem algo novo" não funcionaria: com o painel
             // fechado a stream ficava desconectada, e o publish() do backend descarta
@@ -189,6 +190,7 @@
             // garante que isso roda só depois do navegador aplicar o layout do painel
             // agora visível (scrollHeight já correto nesse ponto).
             requestAnimationFrame(() => this._scrollToBottom());
+            this._publishWidthVar();
         }
 
         // Só esconde visualmente — a stream SSE continua ligada em segundo plano (ver
@@ -196,6 +198,7 @@
         close() {
             this.panel.hidden = true;
             this.fab.hidden = true;
+            this._publishWidthVar();
         }
 
         // Mobile: mesma ideia do close() — esconde o painel, vira uma bolha flutuante —
@@ -203,6 +206,18 @@
         minimize() {
             this.panel.hidden = true;
             this.fab.hidden = false;
+            this._publishWidthVar();
+        }
+
+        // Publica a largura atual do chat numa CSS var global (--jarvis-chat-width,
+        // 0px quando fechado) — outros painéis flutuantes (ex.: navegador interno,
+        // SCRUM-69) leem essa var pra encolher a própria largura em vez de ficar
+        // por baixo do chat. Desacoplado de propósito: chat.js não precisa saber
+        // que o navegador existe, só publica seu próprio estado; qualquer painel
+        // futuro pode reagir do mesmo jeito só lendo a var no CSS.
+        _publishWidthVar() {
+            const width = this.panel.hidden ? 0 : this.panel.getBoundingClientRect().width;
+            document.documentElement.style.setProperty('--jarvis-chat-width', `${width}px`);
         }
 
         toggle() {
@@ -314,6 +329,7 @@
                 if (!dragging) return;
                 const width = Math.min(Math.max(window.innerWidth - event.clientX, 300), window.innerWidth * 0.9);
                 this.panel.style.width = `${width}px`;
+                this._publishWidthVar();
             });
             window.addEventListener('mouseup', () => {
                 if (!dragging) return;
