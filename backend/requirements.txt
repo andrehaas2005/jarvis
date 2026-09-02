@@ -11,3 +11,4 @@ google-auth-oauthlib>=1.2.1
 anthropic>=0.69.0
 sentry-sdk[fastapi]>=2.18.0
 playwright>=1.47.0
+python-multipart>=0.0.12
