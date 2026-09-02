@@ -173,6 +173,17 @@ async def handle_query(query: str, session_id: str, attachments: list[dict[str, 
                 "Essa imagem é grande demais pra eu processar (o limite é 10MB depois de "
                 "convertida) — tenta mandar de novo, se der numa resolução um pouco menor?"
             )
+        if "credit balance is too low" in str(exc).lower():
+            # Achado real em produção: com a conta sem crédito, TODO pedido (mesmo os
+            # mais simples, sem imagem nenhuma) falhava com esse mesmo erro genérico
+            # ("a API recusou o pedido, tenta de novo?") — enganoso, porque tentar de
+            # novo não resolve nada até alguém recarregar a conta. Mensagem específica
+            # e acionável em vez de sugerir um retry que não vai funcionar.
+            return (
+                "Senhor, a conta da Anthropic ficou sem crédito — não consigo processar "
+                "nada até alguém recarregar em console.anthropic.com (Plans & Billing). "
+                "Tentar de novo não vai resolver enquanto isso não for feito."
+            )
         return (
             "Desculpa, Senhor — não consegui processar isso (a API recusou o pedido). "
             "Pode tentar de novo?"
