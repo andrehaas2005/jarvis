@@ -258,6 +258,9 @@
             const displayText = text || `[enviou ${attachment.file.name}]`;
             this._renderMessage('user', displayText, 'message', Date.now(), attachment?.thumbDataUrl);
             this._saveMessage(this.displaySessionId, 'user', displayText, 'message', attachment?.thumbDataUrl);
+            // Some da UI otimisticamente (igual ao texto) — se der erro, o catch abaixo
+            // devolve o anexo E o texto pro usuário, pra não ter que escolher o arquivo
+            // de novo nem reescrever a pergunta.
             this._clearAttachment();
             this._ownRequestIds.add(clientMsgId);
             // Rede de segurança: se o eco do SSE nunca chegar (stream caiu, proxy
@@ -268,11 +271,14 @@
             try {
                 let response;
                 if (attachment) {
-                    // Envia o ARQUIVO EM RESOLUÇÃO CHEIA (a miniatura acima é só pra exibir
-                    // localmente/economizar espaço no IndexedDB — o Claude precisa da imagem
-                    // de verdade pra analisar direito, ex.: ler valores de um comprovante).
+                    // Fotos de celular em resolução alta passam do limite de 10MB (em
+                    // base64) que a API da Anthropic aceita por imagem — achado real em
+                    // produção: virava erro 500 cru, o Jarvis nunca chegava a "ver" a
+                    // imagem. Reduz ANTES de enviar quando o arquivo é grande; PDF e
+                    // imagens já pequenas passam direto, sem perda de qualidade à toa.
+                    const uploadFile = await this._prepareImageForUpload(attachment.file);
                     const formData = new FormData();
-                    formData.append('file', attachment.file);
+                    formData.append('file', uploadFile);
                     formData.append('message', text);
                     formData.append('session_id', sessionId);
                     formData.append('client_msg_id', clientMsgId);
@@ -302,10 +308,21 @@
                 this._ownRequestIds.delete(clientMsgId);
                 this._renderMessage(
                     'assistant',
-                    `⚠️ Não consegui falar com o backend agora (${error.message}).`,
+                    `⚠️ Não consegui falar com o backend agora (${error.message}). ` +
+                        (attachment ? 'Deixei o anexo pronto de novo pra você tentar reenviar.' : ''),
                     'message',
                     Date.now()
                 );
+                // Devolve o anexo (e o texto) pro usuário poder só apertar enviar de novo,
+                // em vez de escolher o arquivo outra vez — achado real em produção: sem
+                // isso, um reenvio manual ia sem anexo nenhum, e o Jarvis respondia "você
+                // não me enviou nada", confundindo ainda mais quem já tinha visto um erro.
+                if (attachment) {
+                    this.pendingAttachment = attachment;
+                    this._showAttachmentPreview(attachment);
+                    this.input.value = text;
+                    this._autoGrow();
+                }
             } finally {
                 this.sendBtn.disabled = false;
             }
@@ -329,18 +346,53 @@
             }
             const isImage = file.type.startsWith('image/');
             const thumbDataUrl = isImage ? await this._makeThumbnail(file) : null;
-            this.pendingAttachment = { file, thumbDataUrl };
+            const attachment = { file, thumbDataUrl };
+            this.pendingAttachment = attachment;
+            this._showAttachmentPreview(attachment);
+        }
 
+        _showAttachmentPreview(attachment) {
             this.attachmentPreview.hidden = false;
-            this.attachmentName.textContent = file.name;
-            if (thumbDataUrl) {
-                this.attachmentThumb.src = thumbDataUrl;
+            this.attachmentName.textContent = attachment.file.name;
+            if (attachment.thumbDataUrl) {
+                this.attachmentThumb.src = attachment.thumbDataUrl;
                 this.attachmentThumb.hidden = false;
                 this.attachmentIcon.hidden = true;
             } else {
                 this.attachmentThumb.hidden = true;
                 this.attachmentIcon.hidden = false;
             }
+        }
+
+        // Reduz uma foto grande antes de enviar (canvas, máx. 2000px no lado maior,
+        // JPEG 85%) — o texto de um comprovante continua perfeitamente legível nesse
+        // tamanho, e o arquivo final fica bem abaixo do limite de 10MB (em base64) da
+        // API por imagem. PDF passa direto (a Anthropic lê o PDF original). Se o
+        // arquivo já é pequeno, não mexe (evita perda de qualidade à toa).
+        _prepareImageForUpload(file, maxDim = 2000, maxBytes = 6 * 1024 * 1024) {
+            if (!file.type.startsWith('image/') || file.size <= maxBytes) return file;
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.round(img.width * scale);
+                        canvas.height = Math.round(img.height * scale);
+                        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                        canvas.toBlob(
+                            (blob) => resolve(blob ? new File([blob], file.name, { type: 'image/jpeg' }) : file),
+                            'image/jpeg',
+                            0.85
+                        );
+                    };
+                    img.onerror = () => resolve(file);
+                    img.src = reader.result;
+                };
+                reader.onerror = () => resolve(file);
+                reader.readAsDataURL(file);
+            });
         }
 
         // Miniatura reduzida (canvas, máx. 200px, JPEG 60%) pra exibir/guardar local —
