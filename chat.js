@@ -34,16 +34,12 @@
             this.attachPhotoBtn = document.getElementById('jarvisChatAttachPhoto');
             this.attachFileBtn = document.getElementById('jarvisChatAttachFile');
             this.fileInput = document.getElementById('jarvisChatFileInput');
-            this.attachmentPreview = document.getElementById('jarvisChatAttachmentPreview');
-            this.attachmentThumb = document.getElementById('jarvisChatAttachmentThumb');
-            this.attachmentIcon = document.getElementById('jarvisChatAttachmentIcon');
-            this.attachmentName = document.getElementById('jarvisChatAttachmentName');
-            this.attachmentRemoveBtn = document.getElementById('jarvisChatAttachmentRemove');
+            this.attachmentsPreview = document.getElementById('jarvisChatAttachmentsPreview');
             this.topbarBtn = document.getElementById('topbarChat');
 
             if (!this.panel) return; // login.html/terms.html etc. não têm o painel
 
-            this.pendingAttachment = null;
+            this.pendingAttachments = [];
             this.db = null;
             this.eventSource = null;
             this.currentSessionId = null;
@@ -128,7 +124,7 @@
             };
         }
 
-        _saveMessage(sessionId, role, text, kind, attachmentThumb) {
+        _saveMessage(sessionId, role, text, kind, attachmentThumbs) {
             if (!this.db) return;
             const tx = this.db.transaction(STORE_NAME, 'readwrite');
             tx.objectStore(STORE_NAME).add({
@@ -137,9 +133,10 @@
                 text,
                 kind: kind || 'message',
                 ts: Date.now(),
-                // Miniatura JÁ REDUZIDA (ver _makeThumbnail) — nunca a imagem em
-                // resolução cheia, pra não inchar o IndexedDB local (SCRUM-69/Fase 1).
-                attachment_thumb: attachmentThumb || null,
+                // Miniaturas JÁ REDUZIDAS (ver _makeThumbnail) — nunca a imagem em
+                // resolução cheia, pra não inchar o IndexedDB local (SCRUM-69). Lista,
+                // já que uma mensagem pode ter mais de um anexo.
+                attachment_thumbs: attachmentThumbs && attachmentThumbs.length ? attachmentThumbs : null,
             });
         }
 
@@ -152,24 +149,35 @@
             request.onsuccess = () => {
                 const rows = request.result || [];
                 rows.sort((a, b) => a.ts - b.ts);
-                rows.forEach((row) => this._renderMessage(row.role, row.text, row.kind, row.ts, row.attachment_thumb));
+                rows.forEach((row) => {
+                    // attachment_thumb (singular) é o formato antigo (uma imagem só) —
+                    // mensagens salvas antes do suporte a múltiplos anexos continuam
+                    // aparecendo certas.
+                    const thumbs = row.attachment_thumbs || (row.attachment_thumb ? [row.attachment_thumb] : null);
+                    this._renderMessage(row.role, row.text, row.kind, row.ts, thumbs);
+                });
                 this._scrollToBottom();
             };
         }
 
         // ---------------------------------------------------------------- render
 
-        _renderMessage(role, text, kind, ts, attachmentThumb) {
+        _renderMessage(role, text, kind, ts, attachmentThumbs) {
             const bubble = document.createElement('div');
             bubble.className = `jarvis-chat-msg ${role}`;
             if (kind && kind !== 'message') bubble.dataset.kind = kind;
 
-            if (attachmentThumb) {
-                const img = document.createElement('img');
-                img.className = 'jarvis-chat-msg-thumb';
-                img.src = attachmentThumb;
-                img.alt = 'Anexo enviado';
-                bubble.appendChild(img);
+            if (attachmentThumbs && attachmentThumbs.length) {
+                const wrap = document.createElement('div');
+                wrap.className = 'jarvis-chat-msg-thumbs';
+                for (const thumb of attachmentThumbs) {
+                    const img = document.createElement('img');
+                    img.className = 'jarvis-chat-msg-thumb';
+                    img.src = thumb;
+                    img.alt = 'Anexo enviado';
+                    wrap.appendChild(img);
+                }
+                bubble.appendChild(wrap);
             }
 
             const body = document.createElement('div');
@@ -247,21 +255,26 @@
 
         async _send() {
             const text = this.input.value.trim();
-            const attachment = this.pendingAttachment;
-            if (!text && !attachment) return;
+            const attachments = this.pendingAttachments;
+            if (!text && !attachments.length) return;
             const sessionId = this.getSessionId();
             const clientMsgId = crypto.randomUUID();
             this.input.value = '';
             this._autoGrow();
             this.sendBtn.disabled = true;
 
-            const displayText = text || `[enviou ${attachment.file.name}]`;
-            this._renderMessage('user', displayText, 'message', Date.now(), attachment?.thumbDataUrl);
-            this._saveMessage(this.displaySessionId, 'user', displayText, 'message', attachment?.thumbDataUrl);
+            const displayText =
+                text ||
+                (attachments.length === 1
+                    ? `[enviou ${attachments[0].file.name}]`
+                    : `[enviou ${attachments.length} arquivos]`);
+            const thumbs = attachments.map((a) => a.thumbDataUrl).filter(Boolean);
+            this._renderMessage('user', displayText, 'message', Date.now(), thumbs);
+            this._saveMessage(this.displaySessionId, 'user', displayText, 'message', thumbs);
             // Some da UI otimisticamente (igual ao texto) — se der erro, o catch abaixo
-            // devolve o anexo E o texto pro usuário, pra não ter que escolher o arquivo
-            // de novo nem reescrever a pergunta.
-            this._clearAttachment();
+            // devolve os anexos E o texto pro usuário, pra não ter que escolher os
+            // arquivos de novo nem reescrever a pergunta.
+            this._clearAttachments();
             this._ownRequestIds.add(clientMsgId);
             // Rede de segurança: se o eco do SSE nunca chegar (stream caiu, proxy
             // bufferizando), não queremos vazar memória guardando o id pra sempre.
@@ -270,15 +283,17 @@
             const token = localStorage.getItem('jarvis-auth-token');
             try {
                 let response;
-                if (attachment) {
+                if (attachments.length) {
                     // Fotos de celular em resolução alta passam do limite de 10MB (em
                     // base64) que a API da Anthropic aceita por imagem — achado real em
                     // produção: virava erro 500 cru, o Jarvis nunca chegava a "ver" a
                     // imagem. Reduz ANTES de enviar quando o arquivo é grande; PDF e
                     // imagens já pequenas passam direto, sem perda de qualidade à toa.
-                    const uploadFile = await this._prepareImageForUpload(attachment.file);
                     const formData = new FormData();
-                    formData.append('file', uploadFile);
+                    for (const attachment of attachments) {
+                        const uploadFile = await this._prepareImageForUpload(attachment.file);
+                        formData.append('files', uploadFile);
+                    }
                     formData.append('message', text);
                     formData.append('session_id', sessionId);
                     formData.append('client_msg_id', clientMsgId);
@@ -309,17 +324,17 @@
                 this._renderMessage(
                     'assistant',
                     `⚠️ Não consegui falar com o backend agora (${error.message}). ` +
-                        (attachment ? 'Deixei o anexo pronto de novo pra você tentar reenviar.' : ''),
+                        (attachments.length ? 'Deixei o(s) anexo(s) pronto(s) de novo pra você tentar reenviar.' : ''),
                     'message',
                     Date.now()
                 );
-                // Devolve o anexo (e o texto) pro usuário poder só apertar enviar de novo,
-                // em vez de escolher o arquivo outra vez — achado real em produção: sem
-                // isso, um reenvio manual ia sem anexo nenhum, e o Jarvis respondia "você
-                // não me enviou nada", confundindo ainda mais quem já tinha visto um erro.
-                if (attachment) {
-                    this.pendingAttachment = attachment;
-                    this._showAttachmentPreview(attachment);
+                // Devolve os anexos (e o texto) pro usuário poder só apertar enviar de
+                // novo, em vez de escolher os arquivos outra vez — achado real em
+                // produção: sem isso, um reenvio manual ia sem anexo nenhum, e o Jarvis
+                // respondia "você não me enviou nada", confundindo quem já tinha visto erro.
+                if (attachments.length) {
+                    this.pendingAttachments = attachments;
+                    this._renderAttachmentsPreview();
                     this.input.value = text;
                     this._autoGrow();
                 }
@@ -328,40 +343,90 @@
             }
         }
 
-        // ----------------------------------------------------- anexo (SCRUM-69, Fase 1)
+        // ----------------------------------------------------- anexos (SCRUM-69)
+
+        static MAX_ATTACHMENTS = 5;
+        static MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
 
         async _onFileSelected() {
-            const file = this.fileInput.files?.[0];
-            this.fileInput.value = ''; // permite escolher o mesmo arquivo de novo depois
-            if (!file) return;
-            const MAX_BYTES = 15 * 1024 * 1024;
-            if (file.size > MAX_BYTES) {
+            const files = Array.from(this.fileInput.files || []);
+            this.fileInput.value = ''; // permite escolher os mesmos arquivos de novo depois
+            if (!files.length) return;
+
+            const room = JarvisChat.MAX_ATTACHMENTS - this.pendingAttachments.length;
+            if (room <= 0) {
                 this._renderMessage(
                     'assistant',
-                    '⚠️ Esse arquivo é grande demais (máx. 15MB). Tenta um menor?',
+                    `⚠️ Só dá pra anexar até ${JarvisChat.MAX_ATTACHMENTS} arquivos por mensagem.`,
                     'message',
                     Date.now()
                 );
                 return;
             }
-            const isImage = file.type.startsWith('image/');
-            const thumbDataUrl = isImage ? await this._makeThumbnail(file) : null;
-            const attachment = { file, thumbDataUrl };
-            this.pendingAttachment = attachment;
-            this._showAttachmentPreview(attachment);
+            const toAdd = files.slice(0, room);
+            if (files.length > toAdd.length) {
+                this._renderMessage(
+                    'assistant',
+                    `⚠️ Peguei só os ${toAdd.length} primeiros — o limite é ${JarvisChat.MAX_ATTACHMENTS} arquivos por mensagem.`,
+                    'message',
+                    Date.now()
+                );
+            }
+
+            for (const file of toAdd) {
+                if (file.size > JarvisChat.MAX_ATTACHMENT_BYTES) {
+                    this._renderMessage(
+                        'assistant',
+                        `⚠️ '${file.name}' é grande demais (máx. 15MB). Tenta um menor?`,
+                        'message',
+                        Date.now()
+                    );
+                    continue;
+                }
+                const isImage = file.type.startsWith('image/');
+                const thumbDataUrl = isImage ? await this._makeThumbnail(file) : null;
+                this.pendingAttachments.push({ file, thumbDataUrl });
+            }
+            this._renderAttachmentsPreview();
         }
 
-        _showAttachmentPreview(attachment) {
-            this.attachmentPreview.hidden = false;
-            this.attachmentName.textContent = attachment.file.name;
-            if (attachment.thumbDataUrl) {
-                this.attachmentThumb.src = attachment.thumbDataUrl;
-                this.attachmentThumb.hidden = false;
-                this.attachmentIcon.hidden = true;
-            } else {
-                this.attachmentThumb.hidden = true;
-                this.attachmentIcon.hidden = false;
-            }
+        _renderAttachmentsPreview() {
+            this.attachmentsPreview.innerHTML = '';
+            this.attachmentsPreview.hidden = this.pendingAttachments.length === 0;
+            this.pendingAttachments.forEach((attachment, index) => {
+                const chip = document.createElement('div');
+                chip.className = 'jarvis-chat-attachment-chip';
+
+                if (attachment.thumbDataUrl) {
+                    const img = document.createElement('img');
+                    img.className = 'jarvis-chat-attachment-thumb';
+                    img.src = attachment.thumbDataUrl;
+                    img.alt = '';
+                    chip.appendChild(img);
+                } else {
+                    const icon = document.createElement('span');
+                    icon.className = 'jarvis-chat-attachment-icon';
+                    icon.textContent = '📎';
+                    chip.appendChild(icon);
+                }
+
+                const name = document.createElement('span');
+                name.className = 'jarvis-chat-attachment-name';
+                name.textContent = attachment.file.name;
+                chip.appendChild(name);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'jarvis-chat-attachment-remove';
+                removeBtn.title = 'Remover anexo';
+                removeBtn.textContent = '×';
+                removeBtn.addEventListener('click', () => {
+                    this.pendingAttachments.splice(index, 1);
+                    this._renderAttachmentsPreview();
+                });
+                chip.appendChild(removeBtn);
+
+                this.attachmentsPreview.appendChild(chip);
+            });
         }
 
         // Reduz uma foto grande antes de enviar (canvas, máx. 2000px no lado maior,
@@ -418,13 +483,9 @@
             });
         }
 
-        _clearAttachment() {
-            this.pendingAttachment = null;
-            this.attachmentPreview.hidden = true;
-            this.attachmentThumb.src = '';
-            this.attachmentThumb.hidden = true;
-            this.attachmentIcon.hidden = true;
-            this.attachmentName.textContent = '';
+        _clearAttachments() {
+            this.pendingAttachments = [];
+            this._renderAttachmentsPreview();
         }
 
         // ----------------------------------------------------------------- SSE
@@ -535,7 +596,6 @@
                 this.fileInput.click();
             });
             this.fileInput?.addEventListener('change', () => this._onFileSelected());
-            this.attachmentRemoveBtn?.addEventListener('click', () => this._clearAttachment());
         }
     }
 
