@@ -24,6 +24,7 @@ from app.orchestrator.connection_check import check_service
 from app.orchestrator.history_store import init_history_db
 from app.orchestrator.router import handle_query
 from app.presence import get_active_count, heartbeat
+from mcp_servers.browser import server as browser_server
 from mcp_servers.obsidian.obsidian_client import ObsidianClient
 from app.settings_store import (
     get_llm_config_public,
@@ -279,6 +280,140 @@ async def obsidian_graph(authorization: str | None = Header(default=None)) -> di
         return ObsidianClient(settings.obsidian_vault_path).build_graph()
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/browser/tabs")
+async def browser_tabs(authorization: str | None = Header(default=None)) -> dict:
+    """Abas abertas no navegador interno (SCRUM-69) — o HUD faz polling
+    disso pra desenhar a tira de abas do painel flutuante."""
+    _require_user(authorization)
+    return {"tabs": await browser_server.get_manager().list_tabs()}
+
+
+class BrowserOpenRequest(BaseModel):
+    url: str
+    tab_id: str = ""
+
+
+@app.post("/browser/tabs")
+async def browser_tabs_open(body: BrowserOpenRequest, authorization: str | None = Header(default=None)) -> dict:
+    """Abre/navega uma aba direto pelo painel do HUD (usuário digitando uma
+    URL ali), sem precisar passar por voz/chat — mesma ação por trás de
+    `browser_open`."""
+    _require_user(authorization)
+    try:
+        tab = await browser_server.get_manager().open(body.url, body.tab_id or None)
+    except Exception as exc:  # noqa: BLE001 — erro de navegação (DNS, timeout) vira 502 pro HUD mostrar
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"tab_id": tab.id, "title": tab.title, "url": tab.url}
+
+
+@app.delete("/browser/tabs/{tab_id}")
+async def browser_tabs_close(tab_id: str, authorization: str | None = Header(default=None)) -> dict:
+    _require_user(authorization)
+    await browser_server.get_manager().close_tab(tab_id)
+    return {"closed": tab_id}
+
+
+class BrowserScrollRequest(BaseModel):
+    direction: str = "down"
+    amount: int = 700
+
+
+@app.post("/browser/tabs/{tab_id}/scroll")
+async def browser_tabs_scroll(
+    tab_id: str, body: BrowserScrollRequest, authorization: str | None = Header(default=None)
+) -> dict:
+    _require_user(authorization)
+    try:
+        tab = await browser_server.get_manager().scroll(tab_id, body.direction, body.amount)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"tab_id": tab.id, "title": tab.title, "url": tab.url}
+
+
+class BrowserClickRequest(BaseModel):
+    x: float
+    y: float
+
+
+@app.post("/browser/tabs/{tab_id}/click")
+async def browser_tabs_click(
+    tab_id: str, body: BrowserClickRequest, authorization: str | None = Header(default=None)
+) -> dict:
+    _require_user(authorization)
+    try:
+        tab = await browser_server.get_manager().click(tab_id, body.x, body.y)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"tab_id": tab.id, "title": tab.title, "url": tab.url}
+
+
+class BrowserTypeRequest(BaseModel):
+    text: str
+    press_enter: bool = False
+
+
+@app.post("/browser/tabs/{tab_id}/type")
+async def browser_tabs_type(
+    tab_id: str, body: BrowserTypeRequest, authorization: str | None = Header(default=None)
+) -> dict:
+    _require_user(authorization)
+    try:
+        tab = await browser_server.get_manager().type_text(tab_id, body.text, body.press_enter)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"tab_id": tab.id, "title": tab.title, "url": tab.url}
+
+
+@app.get("/browser/tabs/{tab_id}/screenshot")
+async def browser_tab_screenshot(tab_id: str, authorization: str | None = Header(default=None)) -> dict:
+    """Screenshot atual (base64 JPEG) de uma aba do navegador interno —
+    o HUD faz polling disso pra manter o painel flutuante "ao vivo"."""
+    _require_user(authorization)
+    try:
+        image_b64 = await browser_server.get_manager().screenshot_b64(tab_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"tab_id": tab_id, "image_b64": image_b64}
+
+
+@app.get("/browser/bookmarks")
+async def browser_bookmarks_list(authorization: str | None = Header(default=None)) -> dict:
+    """Favoritos salvos no navegador interno, mais recente primeiro."""
+    _require_user(authorization)
+    try:
+        return {"bookmarks": browser_server.get_bookmarks().list()}
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+class BrowserBookmarkRequest(BaseModel):
+    title: str
+    url: str
+
+
+@app.post("/browser/bookmarks")
+async def browser_bookmarks_add(
+    body: BrowserBookmarkRequest, authorization: str | None = Header(default=None)
+) -> dict:
+    """Salva um favorito pelo próprio painel do HUD (botão ☆), sem precisar
+    passar pelo Jarvis por voz/chat."""
+    _require_user(authorization)
+    try:
+        return browser_server.get_bookmarks().add(body.title, body.url)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.delete("/browser/bookmarks/{bookmark_id}")
+async def browser_bookmarks_remove(bookmark_id: str, authorization: str | None = Header(default=None)) -> dict:
+    _require_user(authorization)
+    try:
+        removed = browser_server.get_bookmarks().remove(bookmark_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"removed": removed}
 
 
 @app.post("/status/presence")
