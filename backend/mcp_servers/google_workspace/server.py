@@ -94,7 +94,16 @@ async def append_sheet_row(spreadsheet: str, sheet_name: str, values: list[Any])
     IMPORTANTE: `sheet_name` precisa ser o nome REAL da aba — NUNCA chute
     'Sheet1'/'Planilha1'. Se ainda não souber o nome desta planilha nesta
     conversa, chame `read_sheet` primeiro (retorna `sheet_names`) antes de
-    chamar esta ferramenta."""
+    chamar esta ferramenta.
+
+    IMPORTANTE #2 — verifique duplicata antes de chamar: olhe os dados que
+    `read_sheet` já retornou e confira se já não existe uma linha pro mesmo
+    item (mesma entidade/descrição parecida, mesma data ou mesmo mês). Se
+    existir, use `write_sheet` pra corrigir o valor/data dessa linha em vez
+    de chamar `append_sheet_row` — nunca duplique uma linha que já existe só
+    porque o valor mudou. Achado real em produção: já existia 'Cartão C6'
+    com vencimento 01/09 (valor desatualizado) e uma nova linha foi
+    acrescentada pro mesmo cartão/mesma data em vez de corrigir a existente."""
     client = _get_client()
     return await asyncio.to_thread(client.append_sheet_row, spreadsheet, sheet_name, values)
 
