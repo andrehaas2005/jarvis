@@ -375,6 +375,11 @@ async def browser_tab_screenshot(tab_id: str, authorization: str | None = Header
         image_b64 = await browser_server.get_manager().screenshot_b64(tab_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        # Timeout/travamento no Playwright ao tirar o screenshot (ver
+        # browser_client.screenshot_b64) — 502 (não 500) pro HUD saber que é
+        # um problema transitório da página em si, não do backend.
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"tab_id": tab_id, "image_b64": image_b64}
 
 

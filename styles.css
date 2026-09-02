@@ -1767,7 +1767,13 @@ select.settings-input {
    do overlay do segundo cérebro (radial escuro + acento --hud-blue). */
 .browser-panel {
     position: fixed;
-    inset: 0;
+    /* top right bottom left — a direita encolhe pra largura do chat (chat.js publica
+       essa var sempre que abre/fecha/redimensiona, ver _publishWidthVar) em vez do
+       chat flutuar por cima cobrindo parte da página exibida (pedido do usuário:
+       ver o navegador e o chat lado a lado, sem um atrapalhar o outro). 0px quando
+       o chat está fechado — o navegador some/reaparece suave com a transição abaixo. */
+    inset: 0 var(--jarvis-chat-width, 0px) 0 0;
+    transition: inset 0.15s ease;
     z-index: 100;
     display: flex;
     flex-direction: column;

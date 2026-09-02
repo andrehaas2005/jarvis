@@ -117,11 +117,30 @@ class BrowserManager:
         return tab
 
     async def screenshot_b64(self, tab_id: str) -> str:
+        """Tira o screenshot atual da aba. `animations='disabled'` e um timeout
+        curto (com 1 nova tentativa) evitam que uma página com animação CSS
+        infinita ou fonte que nunca "assenta" prenda a chamada até o timeout
+        padrão do Playwright (30s) — achado real em produção: `Page.screenshot:
+        Timeout 30000ms exceeded` travando o painel do HUD por meio minuto."""
         import base64
 
         tab = self._get(tab_id)
         tab.last_used = time.time()
-        png = await tab.page.screenshot(type="jpeg", quality=65)
+        try:
+            png = await tab.page.screenshot(type="jpeg", quality=65, timeout=10_000, animations="disabled")
+        except Exception as exc:  # noqa: BLE001 — timeout/crash do Playwright, tenta mais uma vez
+            logger.warning(
+                "browser_screenshot_timeout_retry",
+                extra={"extra_fields": {"tab_id": tab_id, "error": str(exc)}},
+            )
+            try:
+                png = await tab.page.screenshot(type="jpeg", quality=65, timeout=8_000, animations="disabled")
+            except Exception as exc2:  # noqa: BLE001
+                raise RuntimeError(
+                    "Não consegui tirar um screenshot dessa página a tempo — ela pode ter uma "
+                    "animação infinita ou estar travada. Tente recarregar a aba (abrir a mesma "
+                    "URL de novo) ou fechar e abrir outra."
+                ) from exc2
         return base64.b64encode(png).decode("ascii")
 
     async def scroll(self, tab_id: str, direction: str, amount: int = 700) -> Tab:
