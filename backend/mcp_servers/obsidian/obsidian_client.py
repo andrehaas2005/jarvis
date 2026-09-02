@@ -169,14 +169,37 @@ class ObsidianClient:
             return self.write_note(rel_path, new_content, tags=existing.tags)
         return self.write_note(rel_path, content)
 
+    @staticmethod
+    def _word_variants(word: str) -> list[str]:
+        """Singular/plural simples em português (`filhos`->`filho`, `contas`->`conta`)
+        — achado real em produção: "quem são meus filhos" buscava só a palavra
+        "filhos" e não achava a nota que fala em "filho" no singular, mesmo com o
+        singular "filho" já achando ela perfeitamente. Não é um stemmer de verdade,
+        só cobre o caso comum de plural em -s/-es."""
+        variants = [word]
+        if len(word) > 3:
+            if word.endswith("ões"):
+                variants.append(word[:-3] + "ão")
+            elif word.endswith("ães"):
+                variants.append(word[:-3] + "ão")
+            elif word.endswith("res") or word.endswith("les"):
+                variants.append(word[:-2])
+            elif word.endswith("es") and len(word) > 4:
+                variants.append(word[:-2])
+            elif word.endswith("s"):
+                variants.append(word[:-1])
+        return variants
+
     def search_notes(self, query: str, max_results: int = 10) -> list[Note]:
         """Busca por palavras (case-insensitive) no título, tags e conteúdo — casa
         qualquer palavra da query, não exige a frase inteira como substring exata
         (bug real: "time de futebol" não achava a nota que só contém "futebol" e
         "time" separados, porque a frase completa nunca aparece literal no texto).
-        Ranqueada por quantas palavras da query bateram, mais bate primeiro. Busca
-        semântica via embeddings fica pra uma fase 2, se algum dia for necessária
-        (ver SCRUM-63)."""
+        Também tenta uma variante singular/plural simples de cada palavra (ver
+        `_word_variants`) — bug real: "filhos" (plural) não achava a nota que só
+        tem "filho" (singular) no texto. Ranqueada por quantas palavras da query
+        bateram, mais bate primeiro. Busca semântica via embeddings fica pra uma
+        fase 2, se algum dia for necessária (ver SCRUM-63)."""
         self.ensure_vault_ok()
         query_words = [w for w in re.findall(r"\w+", query.lower()) if w]
         if not query_words:
@@ -186,7 +209,9 @@ class ObsidianClient:
         for rel_path in self.list_notes():
             note = self._load_note(rel_path)
             haystack = f"{note.title} {' '.join(note.tags)} {note.content}".lower()
-            score = sum(1 for w in query_words if w in haystack)
+            score = sum(
+                1 for w in query_words if any(variant in haystack for variant in self._word_variants(w))
+            )
             if score > 0:
                 scored.append((score, note))
 
