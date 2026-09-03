@@ -128,6 +128,22 @@ async def create_spreadsheet(title: str) -> dict:
 
 
 @mcp.tool()
+async def create_sheet_tab(spreadsheet: str, title: str, values: list[list[Any]] = None) -> dict:
+    """Cria uma aba (sheet) NOVA dentro de uma planilha JÁ EXISTENTE — use isso
+    (não `create_spreadsheet`) quando o pedido for organizar algo por assunto
+    dentro de uma planilha que o usuário já tem, ex.: "cria uma aba pra essa
+    compra com os itens, pra eu comparar preço depois". `spreadsheet` aceita
+    nome ou ID (resolvido igual às outras tools). `values` (opcional) já
+    escreve o conteúdo inicial a partir de A1 — uma lista de linhas, cada
+    linha uma lista de colunas; use pra escrever tudo numa chamada só em vez
+    de várias `append_sheet_row`. `title` não pode ter / \\ ? * [ ] : (nomes
+    de aba do Google Sheets não aceitam esses caracteres — são trocados por
+    "-" automaticamente, então pode passar como estiver)."""
+    client = _get_client()
+    return await asyncio.to_thread(client.create_sheet_tab, spreadsheet, title, values)
+
+
+@mcp.tool()
 async def read_doc(document: str) -> dict:
     """Lê o conteúdo de texto de um Google Docs. `document` aceita nome ou ID
     (nome é resolvido buscando no Drive)."""
