@@ -25,13 +25,16 @@ from mcp_servers.google_auth import get_google_credentials
 
 logger = get_logger("jarvis.mcp.google_workspace")
 
-# drive.readonly (achar arquivo por nome, ler metadados) + spreadsheets/documents
-# completos (ler E escrever em qualquer planilha/doc que o usuário tenha acesso —
-# não só os criados pelo Jarvis, já que o pedido real é "abre MINHA planilha que já
-# existe"). Não pede escopo de escrita geral do Drive (criar/mover/deletar arquivo
-# solto) de propósito — menor privilégio possível pro caso de uso real.
+# drive completo (ler E criar/organizar arquivo — não só drive.readonly) + spreadsheets/
+# documents completos (ler E escrever em qualquer planilha/doc que o usuário tenha acesso —
+# não só os criados pelo Jarvis, já que o pedido real é "abre MINHA planilha que já existe").
+# Escopo de escrita geral do Drive é proposital (SCRUM-69 fase 2, decisão explícita do
+# usuário sobre `drive.file` vs `drive` completo): exportar código/testes gerados e fazer
+# backup de conversa como arquivo de verdade no Drive, organizado em pastas por
+# empresa/cliente — `drive.file` só enxergaria arquivo criado pelo próprio Jarvis, não
+# serviria pra também ler/organizar dentro de estrutura de pasta já existente do usuário.
 SCOPES = [
-    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/documents",
 ]
@@ -194,6 +197,53 @@ class GoogleWorkspaceClient:
             self.write_sheet(file_id, f"'{safe_title}'!A1", values)
 
         return {"file_id": file_id, "sheet_id": sheet_id, "title": safe_title}
+
+    def _find_or_create_folder(self, name: str, parent_id: str) -> str:
+        """Acha uma pasta pelo nome dentro de `parent_id`, ou cria se não existir —
+        idempotente (chamar de novo com o mesmo nome/pai não duplica a pasta)."""
+        safe_name = name.replace("'", "\\'")
+        query = (
+            f"name = '{safe_name}' and mimeType = 'application/vnd.google-apps.folder' "
+            f"and '{parent_id}' in parents and trashed = false"
+        )
+        results = self.drive.files().list(q=query, fields="files(id, name)", pageSize=1).execute()
+        matches = results.get("files", [])
+        if matches:
+            return matches[0]["id"]
+        folder = (
+            self.drive.files()
+            .create(
+                body={"name": name, "mimeType": "application/vnd.google-apps.folder", "parents": [parent_id]},
+                fields="id",
+            )
+            .execute()
+        )
+        return folder["id"]
+
+    def create_drive_file(
+        self, folder_path: str, filename: str, content: str, mime_type: str = "text/plain"
+    ) -> dict[str, Any]:
+        """Cria um arquivo de texto no Drive dentro de uma pasta (criando cada nível da
+        pasta se não existir) — pra exportar código/testes gerados ou fazer backup de
+        conversa como arquivo de verdade no Drive do usuário, organizado por pasta.
+        `folder_path` pode ter vários níveis separados por "/" (ex.: "Jarvis-Chat" ou
+        "Jarvis-Dev/GFT/Carrefour") — cada nível é resolvido/criado em sequência, a
+        partir da raiz do Drive."""
+        import io
+
+        from googleapiclient.http import MediaIoBaseUpload
+
+        parent_id = "root"
+        for part in [p for p in folder_path.split("/") if p]:
+            parent_id = self._find_or_create_folder(part, parent_id)
+
+        media = MediaIoBaseUpload(io.BytesIO(content.encode("utf-8")), mimetype=mime_type, resumable=False)
+        file = (
+            self.drive.files()
+            .create(body={"name": filename, "parents": [parent_id]}, media_body=media, fields="id, webViewLink")
+            .execute()
+        )
+        return {"file_id": file["id"], "web_link": file.get("webViewLink", ""), "folder": folder_path}
 
     # ------------------------------------------------------------- Docs
 
