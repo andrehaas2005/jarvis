@@ -30,6 +30,7 @@
             this.sendBtn = document.getElementById('jarvisChatSend');
             this.closeBtn = document.getElementById('jarvisChatClose');
             this.minimizeBtn = document.getElementById('jarvisChatMinimize');
+            this.backupBtn = document.getElementById('jarvisChatBackup');
             this.fab = document.getElementById('jarvisChatFab');
             this.attachPhotoBtn = document.getElementById('jarvisChatAttachPhoto');
             this.attachFileBtn = document.getElementById('jarvisChatAttachFile');
@@ -124,7 +125,7 @@
             };
         }
 
-        _saveMessage(sessionId, role, text, kind, attachmentThumbs) {
+        _saveMessage(sessionId, role, text, kind, attachments) {
             if (!this.db) return;
             const tx = this.db.transaction(STORE_NAME, 'readwrite');
             tx.objectStore(STORE_NAME).add({
@@ -133,10 +134,13 @@
                 text,
                 kind: kind || 'message',
                 ts: Date.now(),
-                // Miniaturas JÁ REDUZIDAS (ver _makeThumbnail) — nunca a imagem em
-                // resolução cheia, pra não inchar o IndexedDB local (SCRUM-69). Lista,
-                // já que uma mensagem pode ter mais de um anexo.
-                attachment_thumbs: attachmentThumbs && attachmentThumbs.length ? attachmentThumbs : null,
+                // Lista de {name, thumb} — thumb é a miniatura JÁ REDUZIDA (ver
+                // _makeThumbnail) pra imagem, null pra anexo sem preview (PDF/MD/código —
+                // SCRUM-69 fase 2: sem isso, um arquivo de texto enviado não deixava
+                // rastro nenhum na bolha da mensagem, parecendo que não tinha sido
+                // enviado). Nunca a imagem em resolução cheia, pra não inchar o
+                // IndexedDB local.
+                attachment_thumbs: attachments && attachments.length ? attachments : null,
             });
         }
 
@@ -150,32 +154,142 @@
                 const rows = request.result || [];
                 rows.sort((a, b) => a.ts - b.ts);
                 rows.forEach((row) => {
-                    // attachment_thumb (singular) é o formato antigo (uma imagem só) —
-                    // mensagens salvas antes do suporte a múltiplos anexos continuam
-                    // aparecendo certas.
-                    const thumbs = row.attachment_thumbs || (row.attachment_thumb ? [row.attachment_thumb] : null);
-                    this._renderMessage(row.role, row.text, row.kind, row.ts, thumbs);
+                    // attachment_thumb (singular) é o formato antigo (uma imagem só, string
+                    // direto) — mensagens salvas antes do suporte a múltiplos anexos e antes
+                    // de guardar {name, thumb} continuam aparecendo certas.
+                    let attachments = row.attachment_thumbs || (row.attachment_thumb ? [row.attachment_thumb] : null);
+                    if (attachments) {
+                        attachments = attachments.map((a) => (typeof a === 'string' ? { name: null, thumb: a } : a));
+                    }
+                    this._renderMessage(row.role, row.text, row.kind, row.ts, attachments);
                 });
                 this._scrollToBottom();
             };
         }
 
+        // Todas as linhas desta sessão (mesmo formato de _loadHistory, mas devolvendo os
+        // dados crus em vez de renderizar) — usado só pelo backup, ver _backupAndClear().
+        _getAllMessages() {
+            return new Promise((resolve) => {
+                if (!this.db) return resolve([]);
+                const tx = this.db.transaction(STORE_NAME, 'readonly');
+                const index = tx.objectStore(STORE_NAME).index('session_id');
+                const request = index.getAll(this.displaySessionId);
+                request.onsuccess = () => {
+                    const rows = (request.result || []).slice().sort((a, b) => a.ts - b.ts);
+                    resolve(rows);
+                };
+                request.onerror = () => resolve([]);
+            });
+        }
+
+        _clearHistory() {
+            return new Promise((resolve) => {
+                if (!this.db) return resolve();
+                const tx = this.db.transaction(STORE_NAME, 'readwrite');
+                const index = tx.objectStore(STORE_NAME).index('session_id');
+                const request = index.openCursor(this.displaySessionId);
+                request.onsuccess = () => {
+                    const cursor = request.result;
+                    if (cursor) {
+                        cursor.delete();
+                        cursor.continue();
+                    } else {
+                        resolve();
+                    }
+                };
+                request.onerror = () => resolve();
+            });
+        }
+
+        // Backup + limpar (SCRUM-69/70/71) — a tela do chat acumula conteúdo indefinidamente
+        // (só cresce, nunca é arquivado), achado real relatado pelo usuário. Backup SEMPRE
+        // primeiro, e só limpa se o backup realmente confirmar sucesso — nunca limpa "na
+        // esperança" de que o upload vá dar certo, senão um erro de rede vira perda de dados.
+        async _backupAndClear() {
+            const rows = await this._getAllMessages();
+            if (!rows.length) {
+                this._renderMessage('assistant', 'Não há nada pra fazer backup — a conversa já está vazia.', 'message', Date.now());
+                return;
+            }
+            const confirmed = window.confirm(
+                `Isso vai salvar ${rows.length} mensagens no Google Drive (pasta "Jarvis-Chat") e depois limpar a tela do chat. Confirma?`
+            );
+            if (!confirmed) return;
+
+            const md = this._formatHistoryAsMarkdown(rows);
+            const token = localStorage.getItem('jarvis-auth-token');
+            this.backupBtn.disabled = true;
+            try {
+                const response = await fetch(`${CHAT_BACKEND_URL}/chat/backup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ content: md }),
+                });
+                if (!response.ok) {
+                    const errBody = await response.json().catch(() => ({}));
+                    throw new Error(errBody.detail || `HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                await this._clearHistory();
+                this.messagesEl.innerHTML = '';
+                this._renderMessage(
+                    'assistant',
+                    `✅ Backup salvo no Google Drive (pasta "Jarvis-Chat") e a conversa foi limpa. ${data.web_link || ''}`,
+                    'message',
+                    Date.now()
+                );
+            } catch (error) {
+                this._renderMessage(
+                    'assistant',
+                    `⚠️ Não consegui fazer o backup (${error.message}) — nada foi apagado, pode tentar de novo.`,
+                    'message',
+                    Date.now()
+                );
+            } finally {
+                this.backupBtn.disabled = false;
+            }
+        }
+
+        _formatHistoryAsMarkdown(rows) {
+            const dateStr = new Date().toLocaleString('pt-BR');
+            const lines = [`# Backup do chat com o Jarvis`, ``, `Exportado em ${dateStr}.`, ``];
+            for (const row of rows) {
+                const who = row.role === 'user' ? 'Você' : 'Jarvis';
+                const time = new Date(row.ts).toLocaleString('pt-BR');
+                lines.push(`## ${who} — ${time}`, ``, row.text || '');
+                const names = (row.attachment_thumbs || []).map((a) => (a && a.name ? a.name : null)).filter(Boolean);
+                if (names.length) lines.push(``, `_Anexo(s): ${names.join(', ')}_`);
+                lines.push(``);
+            }
+            return lines.join('\n');
+        }
+
         // ---------------------------------------------------------------- render
 
-        _renderMessage(role, text, kind, ts, attachmentThumbs) {
+        _renderMessage(role, text, kind, ts, attachments) {
             const bubble = document.createElement('div');
             bubble.className = `jarvis-chat-msg ${role}`;
             if (kind && kind !== 'message') bubble.dataset.kind = kind;
 
-            if (attachmentThumbs && attachmentThumbs.length) {
+            if (attachments && attachments.length) {
                 const wrap = document.createElement('div');
                 wrap.className = 'jarvis-chat-msg-thumbs';
-                for (const thumb of attachmentThumbs) {
-                    const img = document.createElement('img');
-                    img.className = 'jarvis-chat-msg-thumb';
-                    img.src = thumb;
-                    img.alt = 'Anexo enviado';
-                    wrap.appendChild(img);
+                for (const att of attachments) {
+                    if (att.thumb) {
+                        const img = document.createElement('img');
+                        img.className = 'jarvis-chat-msg-thumb';
+                        img.src = att.thumb;
+                        img.alt = att.name || 'Anexo enviado';
+                        wrap.appendChild(img);
+                    } else {
+                        // Sem preview (PDF/MD/código-fonte) — chip com o nome do arquivo,
+                        // pra deixar claro que o anexo FOI enviado (era invisível antes).
+                        const chip = document.createElement('span');
+                        chip.className = 'jarvis-chat-msg-file-chip';
+                        chip.textContent = `📎 ${att.name || 'arquivo'}`;
+                        wrap.appendChild(chip);
+                    }
                 }
                 bubble.appendChild(wrap);
             }
@@ -268,9 +382,13 @@
                 (attachments.length === 1
                     ? `[enviou ${attachments[0].file.name}]`
                     : `[enviou ${attachments.length} arquivos]`);
-            const thumbs = attachments.map((a) => a.thumbDataUrl).filter(Boolean);
-            this._renderMessage('user', displayText, 'message', Date.now(), thumbs);
-            this._saveMessage(this.displaySessionId, 'user', displayText, 'message', thumbs);
+            // {name, thumb} por anexo — antes só guardava a miniatura (thumbDataUrl), que só
+            // existe pra imagem: um .md/.swift anexado virava um array vazio (.filter(Boolean)
+            // descartava o `null`), sumindo da bolha da mensagem sem deixar rastro nenhum
+            // (achado real: usuário sem saber se o arquivo tinha sido enviado de verdade).
+            const attachmentMeta = attachments.map((a) => ({ name: a.file.name, thumb: a.thumbDataUrl || null }));
+            this._renderMessage('user', displayText, 'message', Date.now(), attachmentMeta);
+            this._saveMessage(this.displaySessionId, 'user', displayText, 'message', attachmentMeta);
             // Some da UI otimisticamente (igual ao texto) — se der erro, o catch abaixo
             // devolve os anexos E o texto pro usuário, pra não ter que escolher os
             // arquivos de novo nem reescrever a pergunta.
@@ -572,6 +690,7 @@
             this.topbarBtn?.addEventListener('click', () => this.toggle());
             this.closeBtn?.addEventListener('click', () => this.close());
             this.minimizeBtn?.addEventListener('click', () => this.minimize());
+            this.backupBtn?.addEventListener('click', () => this._backupAndClear());
             this.fab?.addEventListener('click', () => this.open());
             this.sendBtn?.addEventListener('click', () => this._send());
 

@@ -335,6 +335,20 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "create_drive_file",
+        "description": "Cria um arquivo de TEXTO de verdade no Google Drive do usuário (código-fonte, Markdown, backup de conversa — não uma planilha/doc), dentro de uma pasta (cria a pasta se não existir). Use pra 'salvar'/'exportar' código/testes gerados ou fazer backup de conversa como arquivo real no Drive — diferente de `write_note` (memória interna do Jarvis, não é o Drive do usuário). `folder_path` organiza em pastas, ex.: 'Jarvis-Chat' ou 'Jarvis-Dev/<Empresa>/<Cliente>'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "folder_path": {"type": "string"},
+                "filename": {"type": "string"},
+                "content": {"type": "string"},
+                "mime_type": {"type": "string"},
+            },
+            "required": ["folder_path", "filename", "content"],
+        },
+    },
+    {
         "name": "read_doc",
         "description": "Lê o conteúdo de texto de um Google Docs. `document` aceita nome ou ID.",
         "input_schema": {
@@ -579,6 +593,13 @@ async def _dispatch(name: str, tool_input: dict[str, Any]) -> Any:
             spreadsheet=tool_input["spreadsheet"],
             title=tool_input["title"],
             values=tool_input.get("values"),
+        )
+    if name == "create_drive_file":
+        return await google_workspace_server.create_drive_file(
+            folder_path=tool_input["folder_path"],
+            filename=tool_input["filename"],
+            content=tool_input["content"],
+            mime_type=tool_input.get("mime_type", "text/plain"),
         )
     if name == "read_doc":
         return await google_workspace_server.read_doc(document=tool_input["document"])

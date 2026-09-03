@@ -61,6 +61,7 @@
     gap: 8px;
 }
 
+.jarvis-chat-backup,
 .jarvis-chat-minimize,
 .jarvis-chat-close {
     background: transparent;
@@ -83,6 +84,7 @@
     display: none;
 }
 
+.jarvis-chat-backup:hover,
 .jarvis-chat-minimize:hover,
 .jarvis-chat-close:hover {
     border-color: var(--hud-blue);
@@ -153,6 +155,24 @@
     height: 72px;
     max-width: 72px;
     margin-bottom: 0;
+}
+
+/* Anexo sem preview (PDF/MD/código-fonte) dentro da bolha da mensagem — mesma linha
+   dos thumbs de imagem, só que como chip de texto (SCRUM-69 fase 2). */
+.jarvis-chat-msg-file-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    padding: 3px 8px;
+    border-radius: 10px;
+    background: var(--hud-gray);
+    border: 1px solid var(--hud-grid);
+    font-size: 0.72rem;
+    color: var(--hud-text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .jarvis-chat-msg-time {

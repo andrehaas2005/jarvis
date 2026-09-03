@@ -144,6 +144,24 @@ async def create_sheet_tab(spreadsheet: str, title: str, values: list[list[Any]]
 
 
 @mcp.tool()
+async def create_drive_file(folder_path: str, filename: str, content: str, mime_type: str = "text/plain") -> dict:
+    """Cria um arquivo de TEXTO de verdade no Google Drive do usuário (não uma
+    planilha/doc — um arquivo comum, ex.: código-fonte, Markdown, backup de conversa),
+    dentro de uma pasta (cria a pasta se não existir). Use isso quando o usuário pedir
+    pra "salvar"/"exportar" código/testes que você gerou, ou fazer backup de alguma
+    conversa, como arquivo real no Drive dele — não confundir com `write_note`
+    (memória interna do Jarvis no Obsidian, não é o Drive do usuário).
+
+    `folder_path` organiza em pastas (várias, separadas por "/") — ex.:
+    "Jarvis-Chat" pra backup de conversa, ou "Jarvis-Dev/<Empresa>/<Cliente>" pra
+    código/teste exportado de um cliente específico. `mime_type` default é texto
+    puro; use "text/markdown" pra Markdown, "text/x-swift" (ou deixe texto puro
+    mesmo) pra código-fonte — o Drive não valida isso à risca, é só metadado."""
+    client = _get_client()
+    return await asyncio.to_thread(client.create_drive_file, folder_path, filename, content, mime_type)
+
+
+@mcp.tool()
 async def read_doc(document: str) -> dict:
     """Lê o conteúdo de texto de um Google Docs. `document` aceita nome ou ID
     (nome é resolvido buscando no Drive)."""

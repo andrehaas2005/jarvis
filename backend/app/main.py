@@ -630,6 +630,34 @@ async def chat_upload(
     return {"reply": answer}
 
 
+class ChatBackupRequest(BaseModel):
+    content: str
+
+
+@app.post("/chat/backup")
+async def chat_backup(
+    body: ChatBackupRequest, authorization: str | None = Header(default=None)
+) -> dict:
+    """Backup do painel de chat pro Google Drive (SCRUM-70) — determinístico, SEM
+    passar pelo LLM: o histórico já vem pronto (Markdown) do frontend (IndexedDB,
+    ver chat.js `_backupAndClear`), esta rota só grava no Drive. De propósito fora
+    do orquestrador — "salvar antes de apagar" é uma ação de segurança de dados,
+    não deveria depender do modelo decidir chamar a tool certa."""
+    _require_user(authorization)
+    from datetime import datetime, timezone
+
+    from mcp_servers.google_workspace import server as google_workspace_server
+
+    filename = f"backup-chat-{datetime.now(timezone.utc).strftime('%Y-%m-%d_%H%M%S')}.md"
+    try:
+        result = await google_workspace_server.create_drive_file(
+            folder_path="Jarvis-Chat", filename=filename, content=body.content, mime_type="text/markdown"
+        )
+    except Exception as exc:  # noqa: BLE001 — qualquer falha do Drive vira 500 com a causa real
+        raise HTTPException(status_code=500, detail=f"Falha ao salvar no Drive: {exc}") from exc
+    return {"file_id": result["file_id"], "web_link": result.get("web_link", "")}
+
+
 @app.get("/chat/stream")
 async def chat_stream(session_id: str, token: str = "") -> StreamingResponse:
     """Server-Sent Events do chat (SCRUM-26) — o painel do HUD assina isso
