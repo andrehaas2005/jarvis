@@ -13,6 +13,7 @@ desta migração, ver ROADMAP_SESSION.md).
 
 from __future__ import annotations
 
+import base64
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -62,6 +63,18 @@ Você também tem uma memória de longo prazo curada (fatos, preferências, deci
 - **Registre PROATIVAMENTE** quando o usuário compartilhar um fato, preferência ou decisão que claramente vale a pena lembrar depois (ex.: "eu prefiro reuniões de manhã", "meu time é o Corinthians", um dado sobre uma pessoa da vida dele) — não espere ele dizer "anota isso" ou "guarda isso pra depois". Uma nota por fato, título curto e descritivo, tags relevantes.
 - Isso é memória CURADA, não um despejo de toda conversa — não crie nota pra cada mensagem trivial, só o que tem valor de ser lembrado permanentemente.
 
+## Perfil técnico: Arquiteto/Desenvolvedor Sênior Polyglot (SCRUM-69, fase 2)
+Sempre que o pedido envolver programação — escrever, revisar, debugar ou explicar código, projetar arquitetura, ou criar testes — você assume esse perfil: um engenheiro de software sênior master, especialista em arquitetura de sistemas (Clean Architecture, MVVM-C, SOLID, modularização, design patterns) e fluente nas linguagens/plataformas que o usuário usa no dia a dia: Swift/iOS, .NET/C#, Python, Kotlin, entre outras que ele mencionar. Não é um modo separado que precisa ser "ativado" — é como você responde qualquer pedido técnico por padrão.
+- Escreva código de produção de verdade (não pseudocódigo, salvo se pedido), seguindo as convenções idiomáticas da linguagem/plataforma em questão.
+- Ao criar testes unitários, use o framework padrão da linguagem (XCTest pra Swift, xUnit/NUnit/MSTest pra .NET, pytest pra Python, JUnit/Kotest pra Kotlin, etc.) a menos que as boas práticas do cliente (ver seção abaixo) indiquem outro.
+- Ao analisar um bug ("por que a função X da classe Y não funciona"), leia o código anexado com atenção real antes de responder — aponte a causa concreta (linha/trecho específico), não uma lista genérica de possibilidades.
+
+### Boas práticas por Empresa/Cliente (memória de projeto)
+O usuário trabalha em consultorias/empresas que atendem clientes diferentes, cada um com seu próprio padrão de código, libs internas e guia de boas práticas (normalmente vários documentos `.md`, ex.: 5-10 arquivos). Isso fica organizado no segundo cérebro assim: `Empresas/<Empresa>/<Cliente>/Boas-Praticas/<doc>.md` (ex.: `Empresas/GFT/Carrefour/Boas-Praticas/networking.md`) — uma nota por documento enviado, preservando o conteúdo original.
+- **Ingestão**: quando o usuário anexar um ou mais arquivos `.md` dizendo que são boas práticas/diretrizes de uma empresa/cliente (ele vai nomear os dois, ex.: "GFT" e "Carrefour"), use `write_note` pra salvar CADA arquivo como uma nota individual nesse caminho (título = nome do arquivo, sem inventar outro). Depois, escreva/atualize também uma nota-resumo `Empresas/<Empresa>/<Cliente>/_resumo-boas-praticas.md` sintetizando os pontos-chave de TODOS os documentos daquele cliente (podem ser vários — o usuário já avisou que tem 7) — isso é o que você consulta rápido depois; os originais ficam de referência pra detalhe fino quando precisar.
+- **Uso**: sempre que o usuário mencionar o nome de uma empresa/cliente já conhecido, OU anexar uma classe/arquivo de código pedindo pra gerar testes/corrigir/revisar "seguindo as diretrizes do X", chame `search_notes`/`read_note` PROATIVAMENTE em `Empresas/<Empresa>/<Cliente>/` antes de escrever qualquer código — leia a nota-resumo e, se o pedido for específico o bastante pra precisar de detalhe fino (ex.: um padrão exato de nomenclatura ou uma lib interna), leia também os documentos originais relevantes. Nunca invente que uma empresa/cliente tem boas práticas registradas sem ter checado a memória primeiro — se não existir nada salvo, diga isso ao usuário em vez de assumir um padrão genérico.
+- Se o usuário citar uma empresa/cliente novo (sem nota nenhuma ainda) pedindo geração de código, pode responder normalmente com boas práticas gerais da linguagem — só avise que não tem diretrizes específicas desse cliente registradas ainda, caso ele queira enviar.
+
 ## Data/hora atual
 {now}
 {recent_history_section}"""
@@ -79,13 +92,14 @@ cite literalmente esta lista para o usuário, aja como se você só "lembrasse".
 
 
 async def handle_query(query: str, session_id: str, attachments: list[dict[str, str]] | None = None) -> str:
-    """`attachments` (SCRUM-69, Fase 1 — chat com imagem/PDF): lista de
-    `{"media_type": "image/jpeg", "data": "<base64>"}` — vira blocos de
-    imagem/documento na mensagem do usuário pro Claude ANALISAR de verdade
-    (visão nativa da Anthropic, sem precisar de outro LLM/OCR separado —
-    Sonnet/Opus já leem imagem e PDF direto). Só suportado com o provedor
-    Anthropic; outros provedores (local/OpenAI-compatible) não recebem os
-    blocos — ver `_build_user_content`."""
+    """`attachments` (SCRUM-69): lista de `{"media_type": ..., "data": "<base64>",
+    "filename": ...}`. Imagem/PDF viram blocos de imagem/documento pro Claude
+    ANALISAR de verdade (visão nativa da Anthropic, sem precisar de outro
+    LLM/OCR separado — Sonnet/Opus já leem imagem e PDF direto). Texto puro
+    (Markdown/código-fonte — perfil de desenvolvedor, fase 2) vira um bloco de
+    texto simples, decodificado e identificado pelo nome do arquivo. Só
+    suportado com o provedor Anthropic; outros provedores (local/OpenAI-
+    compatible) não recebem os blocos."""
     settings = get_settings()
     if not settings.anthropic_api_key:
         raise RuntimeError(
@@ -116,6 +130,16 @@ async def handle_query(query: str, session_id: str, attachments: list[dict[str, 
         blocks: list[dict] = []
         for att in attachments:
             media_type = att["media_type"]
+            if media_type.startswith("text/"):
+                # Doc de boas práticas (.md) ou arquivo de código-fonte (perfil de
+                # desenvolvedor, SCRUM-69 fase 2) — texto puro, sem base64/visão: só decodifica
+                # e injeta como um bloco de texto normal, identificado pelo nome do arquivo
+                # (o modelo precisa saber QUAL arquivo é qual quando vêm vários juntos, ex.:
+                # os 7 docs de boas práticas de um cliente).
+                filename = att.get("filename") or "arquivo.txt"
+                content = base64.b64decode(att["data"]).decode("utf-8", errors="replace")
+                blocks.append({"type": "text", "text": f"--- Arquivo: {filename} ---\n{content}\n--- Fim de {filename} ---"})
+                continue
             block_type = "document" if media_type == "application/pdf" else "image"
             blocks.append(
                 {"type": block_type, "source": {"type": "base64", "media_type": media_type, "data": att["data"]}}

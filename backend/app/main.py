@@ -529,10 +529,27 @@ async def chat_message(
 _CHAT_UPLOAD_ALLOWED_TYPES = {
     "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf",
 }
+# Anexo de texto puro (perfil de desenvolvedor, SCRUM-69 fase 2): docs de boas práticas em
+# Markdown e arquivos de código-fonte pra análise/geração de testes. Validado por EXTENSÃO,
+# não por content_type — navegador reporta tipo inconsistente/vazio pra esses (".swift" e
+# ".md" comumente chegam como "" ou "application/octet-stream", não dá pra confiar nisso).
+# Tratados como texto simples (sem base64/visão) em `router.py` — ver `_is_text_attachment`.
+_TEXT_ATTACHMENT_EXTENSIONS = {
+    ".md", ".markdown", ".txt",
+    ".swift", ".kt", ".kts", ".cs", ".py", ".java", ".js", ".ts", ".go", ".rb",
+    ".m", ".mm", ".h", ".hpp", ".cpp", ".c", ".json", ".yaml", ".yml", ".xml",
+}
 _CHAT_UPLOAD_MAX_BYTES = 15 * 1024 * 1024  # 15MB — folga generosa sobre uma foto de recibo
 # Várias fotos de uma vez (ex.: um comprovante longo em 2-3 fotos, ou vários recibos
 # pra comparar) — limite baixo de propósito, cada imagem já pesa no payload da API.
+# Mesmo teto vale pro caso de vários docs de boas práticas (ex.: 7 arquivos .md).
 _CHAT_UPLOAD_MAX_FILES = 5
+
+
+def _is_text_attachment(filename: str) -> bool:
+    from pathlib import PurePosixPath
+
+    return PurePosixPath(filename.lower()).suffix in _TEXT_ATTACHMENT_EXTENSIONS
 
 
 @app.post("/chat/upload")
@@ -565,16 +582,39 @@ async def chat_upload(
     attachments: list[dict[str, str]] = []
     names: list[str] = []
     for file in files:
-        if file.content_type not in _CHAT_UPLOAD_ALLOWED_TYPES:
+        filename = file.filename or ""
+        is_text = _is_text_attachment(filename)
+        if not is_text and file.content_type not in _CHAT_UPLOAD_ALLOWED_TYPES:
             raise HTTPException(
                 status_code=415,
-                detail=f"Tipo de arquivo não suportado ({file.content_type}). Aceito: imagem (jpg/png/gif/webp) ou PDF.",
+                detail=(
+                    f"Tipo de arquivo não suportado ({file.content_type}). Aceito: imagem "
+                    "(jpg/png/gif/webp), PDF, Markdown/texto ou código-fonte (.md/.txt/.swift/.kt/.cs/.py/etc.)."
+                ),
             )
         raw = await file.read()
         if len(raw) > _CHAT_UPLOAD_MAX_BYTES:
             raise HTTPException(status_code=413, detail=f"'{file.filename}' grande demais (máx. 15MB).")
-        attachments.append({"media_type": file.content_type, "data": base64.b64encode(raw).decode("ascii")})
-        names.append(file.filename or file.content_type)
+        if is_text:
+            # Normaliza pra "text/plain" independente do que o navegador mandou (pode vir
+            # vazio ou "application/octet-stream" pra .swift/.kt/etc.) — `router.py` decide
+            # o tipo de bloco (texto inline vs. visão) só olhando esse campo, então ele
+            # precisa ser confiável. Valida UTF-8 aqui pra dar um erro claro em vez de deixar
+            # bytes binários (arquivo errado anexado por engano) virarem lixo no prompt.
+            try:
+                raw.decode("utf-8")
+            except UnicodeDecodeError:
+                raise HTTPException(
+                    status_code=415,
+                    detail=f"'{filename}' não parece ser um arquivo de texto válido (UTF-8).",
+                )
+            media_type = "text/plain"
+        else:
+            media_type = file.content_type
+        attachments.append(
+            {"media_type": media_type, "data": base64.b64encode(raw).decode("ascii"), "filename": filename}
+        )
+        names.append(filename or file.content_type)
 
     try:
         answer = await handle_query(message, session_id, attachments=attachments)
