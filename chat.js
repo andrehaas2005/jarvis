@@ -592,7 +592,11 @@
             });
             this.attachFileBtn?.addEventListener('click', () => {
                 if (!this.fileInput) return;
-                this.fileInput.accept = 'application/pdf';
+                // PDF + Markdown/texto/código-fonte (perfil de desenvolvedor, SCRUM-69 fase 2:
+                // docs de boas práticas .md e classes pra análise/teste). A validação real de
+                // tipo é por extensão no backend — isso aqui só filtra o seletor de arquivos.
+                this.fileInput.accept =
+                    'application/pdf,.md,.markdown,.txt,.swift,.kt,.kts,.cs,.py,.java,.js,.ts,.go,.rb,.m,.mm,.h,.hpp,.cpp,.c,.json,.yaml,.yml,.xml';
                 this.fileInput.click();
             });
             this.fileInput?.addEventListener('change', () => this._onFileSelected());
