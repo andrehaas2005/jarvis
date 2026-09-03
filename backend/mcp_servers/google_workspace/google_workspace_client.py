@@ -168,6 +168,33 @@ class GoogleWorkspaceClient:
         result = self.sheets.spreadsheets().create(body={"properties": {"title": title}}).execute()
         return {"file_id": result["spreadsheetId"], "web_link": result.get("spreadsheetUrl", "")}
 
+    # Caracteres que o Google Sheets proíbe em nome de aba — acharia 400 (INVALID_ARGUMENT)
+    # sem essa limpeza (achado real: "Pague Menos 02/09" tem "/" no nome, inválido).
+    _SHEET_TITLE_FORBIDDEN = str.maketrans({c: "-" for c in "/\\?*[]:"})
+
+    def create_sheet_tab(
+        self, name_or_id: str, title: str, values: list[list[Any]] | None = None
+    ) -> dict[str, Any]:
+        """Cria uma aba (sheet) NOVA dentro de uma planilha JÁ EXISTENTE — pra
+        organizar dados por assunto (ex.: uma aba por compra, pra comparar
+        preços depois) sem criar uma planilha nova inteira toda vez. `values`
+        (opcional) já escreve o conteúdo inicial da aba, começando em A1, numa
+        chamada só (mais eficiente que abrir e depois escrever linha a linha)."""
+        file_id = self.resolve_file_id(name_or_id, _SPREADSHEET_MIME)
+        safe_title = title.translate(self._SHEET_TITLE_FORBIDDEN)[:100]  # 100 chars, limite do Sheets
+
+        result = (
+            self.sheets.spreadsheets()
+            .batchUpdate(spreadsheetId=file_id, body={"requests": [{"addSheet": {"properties": {"title": safe_title}}}]})
+            .execute()
+        )
+        sheet_id = result["replies"][0]["addSheet"]["properties"]["sheetId"]
+
+        if values:
+            self.write_sheet(file_id, f"'{safe_title}'!A1", values)
+
+        return {"file_id": file_id, "sheet_id": sheet_id, "title": safe_title}
+
     # ------------------------------------------------------------- Docs
 
     def read_doc(self, name_or_id: str) -> dict[str, Any]:

@@ -322,6 +322,19 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "create_sheet_tab",
+        "description": "Cria uma aba (sheet) NOVA dentro de uma planilha JÁ EXISTENTE — use isso (não 'create_spreadsheet') pra organizar algo por assunto dentro de uma planilha que o usuário já tem, ex.: 'cria uma aba pra essa compra com os itens, pra comparar preço depois'. `values` (opcional) já escreve o conteúdo inicial a partir de A1 numa chamada só (lista de linhas, cada linha uma lista de colunas) em vez de várias 'append_sheet_row'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "spreadsheet": {"type": "string"},
+                "title": {"type": "string"},
+                "values": {"type": "array", "items": {"type": "array"}},
+            },
+            "required": ["spreadsheet", "title"],
+        },
+    },
+    {
         "name": "read_doc",
         "description": "Lê o conteúdo de texto de um Google Docs. `document` aceita nome ou ID.",
         "input_schema": {
@@ -561,6 +574,12 @@ async def _dispatch(name: str, tool_input: dict[str, Any]) -> Any:
         )
     if name == "create_spreadsheet":
         return await google_workspace_server.create_spreadsheet(title=tool_input["title"])
+    if name == "create_sheet_tab":
+        return await google_workspace_server.create_sheet_tab(
+            spreadsheet=tool_input["spreadsheet"],
+            title=tool_input["title"],
+            values=tool_input.get("values"),
+        )
     if name == "read_doc":
         return await google_workspace_server.read_doc(document=tool_input["document"])
     if name == "append_doc":
