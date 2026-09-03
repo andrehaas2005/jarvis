@@ -91,7 +91,15 @@ class AnthropicProvider(LLMProvider):
                 response = await asyncio.to_thread(
                     self._client.messages.create,
                     model=self._model,
-                    max_tokens=2048,
+                    # Era 2048 — achado real em produção (SCRUM-69): pedido com PDF/imagem
+                    # anexado + instrução pra "comentar com personalidade" (regra do próprio
+                    # system prompt) ANTES de agir gera bastante texto antes da chamada de
+                    # ferramenta; com currículo em PDF (~15k tokens de input) o comentário
+                    # sozinho já estourava os 2048, cortando a resposta com
+                    # stop_reason="max_tokens" no meio do bloco tool_use — o `write_note`
+                    # nunca chegava a ser chamado (o texto dizia "vou registrar agora" e
+                    # parava aí, nota nunca criada, sem erro nenhum pro usuário perceber).
+                    max_tokens=8192,
                     system=system,
                     tools=tools,
                     messages=messages,
@@ -102,11 +110,22 @@ class AnthropicProvider(LLMProvider):
                 raise LLMBadRequestError(str(exc)) from exc
             messages.append({"role": "assistant", "content": response.content})
 
-            if response.stop_reason != "tool_use":
-                text = next((b.text for b in response.content if b.type == "text"), "")
-                return text, messages
-
+            # Processa qualquer tool_use presente no conteúdo, independente do
+            # `stop_reason` bater exatamente com "tool_use" — mesmo achado acima:
+            # com `stop_reason == "max_tokens"` o content ainda pode conter um
+            # bloco tool_use (possivelmente com input truncado/incompleto). Deixar
+            # a execução tentar (e falhar/pedir retry pro próprio modelo via
+            # tool_result de erro, se o JSON vier quebrado) é bem melhor que
+            # descartar a chamada em silêncio, que era o bug antes desta correção.
             tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
+            if not tool_use_blocks:
+                text = next((b.text for b in response.content if b.type == "text"), "")
+                if response.stop_reason == "max_tokens":
+                    logger.warning(
+                        "orchestrator_response_truncated",
+                        extra={"extra_fields": {"stop_reason": response.stop_reason}},
+                    )
+                return text, messages
             tool_results = []
             for block in tool_use_blocks:
                 try:
